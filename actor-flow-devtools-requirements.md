@@ -1,11 +1,11 @@
-# Actor Flow DevTools: Technical Requirements
+# Koshko Dev Tools: Technical Requirements
 
 Status: draft  
 Intended use: starting point for product design, implementation planning, and task decomposition
 
 ## 1. Purpose
 
-Actor Flow DevTools is an open-source browser extension for inspecting structured signals emitted by
+Koshko Dev Tools is an open-source browser extension for inspecting structured actor-flow signals emitted by
 applications running in a browser tab and its frames.
 
 The tool must help a developer answer:
@@ -110,7 +110,7 @@ flowchart LR
 
 The WXT project must contain these logical entrypoints:
 
-1. **DevTools entrypoint** creates a dedicated `Actor Flow` panel through
+1. **DevTools entrypoint** creates a dedicated `Koshko` panel through
    `chrome.devtools.panels.create`.
 2. **Panel application** owns the normalized in-memory signal repository and renders views.
 3. **Content script** runs in every permitted frame, validates page messages, enriches them with
@@ -594,7 +594,7 @@ The first stable release is complete when:
 - [WXT](https://github.com/wxt-dev/wxt): MIT-licensed, framework-neutral WebExtension framework
   supporting Manifest V3 and multiple browsers.
 - [Chrome DevTools Panels API](https://developer.chrome.com/docs/extensions/reference/api/devtools/panels):
-  official API for adding the Actor Flow panel.
+  official API for adding the Koshko panel.
 - [Chrome content scripts](https://developer.chrome.com/docs/extensions/develop/concepts/content-scripts):
   isolated-world and page-to-content-script communication model.
 - [Chrome extension messaging](https://developer.chrome.com/docs/extensions/develop/concepts/messaging):

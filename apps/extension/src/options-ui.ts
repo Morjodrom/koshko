@@ -8,7 +8,7 @@ const app = document.querySelector<HTMLDivElement>('#app')!;
 app.innerHTML = `
   <main class="shell">
     <header class="hero">
-      <p class="eyebrow">Actor Flow DevTools</p>
+      <p class="eyebrow">Koshko Dev Tools</p>
       <h1>Origin access</h1>
       <p class="muted">Grant one origin at a time, then reload the page you want to inspect.</p>
     </header>

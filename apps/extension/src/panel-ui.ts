@@ -80,7 +80,7 @@ const Panel = defineComponent({
       if (!connected.value) {
         return hh('main', { class: 'shell' }, [
           hh('section', { class: 'card' }, [
-            hh('h1', 'Actor Flow'),
+            hh('h1', 'Koshko'),
             hh('p', { class: 'muted' }, 'The background connection closed. Reopen DevTools or reload the page.'),
           ]),
         ]);
@@ -95,7 +95,7 @@ const Panel = defineComponent({
       return hh('main', { class: 'shell' }, [
         hh('header', { class: 'toolbar card' }, [
           hh('div', [
-            hh('p', { class: 'eyebrow' }, 'Actor Flow DevTools'),
+            hh('p', { class: 'eyebrow' }, 'Koshko Dev Tools'),
             hh('h1', `Tab ${tabId}`),
             hh(
               'p',

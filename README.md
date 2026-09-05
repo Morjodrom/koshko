@@ -1,4 +1,4 @@
-# Actor Flow DevTools prototype
+# Koshko Dev Tools prototype
 
 Disposable Chrome/Chromium-only prototype for inspecting `actor-flow` window messages emitted by instrumented pages.
 
@@ -53,7 +53,7 @@ WXT will build a dev-only Chrome extension output under
    - For a real product, use that product’s origin
 7. Reload the target tab.
 8. Open DevTools on that tab.
-9. Select the **Actor Flow** panel.
+9. Select the **Koshko** panel.
 10. Click **Run flow** in the demo page or trigger the instrumented product actions.
 
 ## How to inspect a real web product
@@ -61,7 +61,7 @@ WXT will build a dev-only Chrome extension output under
 1. Add the product’s origin in the extension Options page.
 2. Grant permission.
 3. Reload the product tab.
-4. Open DevTools and select **Actor Flow**.
+4. Open DevTools and select **Koshko**.
 5. Trigger the app action that emits `actor-flow` messages.
 6. Read the Timeline or Log panel.
 
