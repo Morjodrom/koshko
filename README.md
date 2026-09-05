@@ -1,11 +1,11 @@
 # Koshko Dev Tools prototype
 
-Disposable Chrome/Chromium-only prototype for inspecting `actor-flow` window messages emitted by instrumented pages.
+Disposable Chrome/Chromium-only prototype for inspecting `koshko` window messages emitted by instrumented pages.
 
 ## First MVP requirements
 
 - Chrome/Chromium only.
-- Capture only explicit `actor-flow` window messages.
+- Capture only explicit `koshko` window messages.
 - Validate and redact payloads before they reach the panel.
 - Show two simple views in DevTools:
   - Timeline
@@ -62,10 +62,10 @@ WXT will build a dev-only Chrome extension output under
 2. Grant permission.
 3. Reload the product tab.
 4. Open DevTools and select **Koshko**.
-5. Trigger the app action that emits `actor-flow` messages.
+5. Trigger the app action that emits `koshko` messages.
 6. Read the Timeline or Log panel.
 
-Important: the extension cannot infer app semantics by itself. A real product must emit messages with the shared `@actor-flow/emitter` helper.
+Important: the extension cannot infer app semantics by itself. A real product must emit messages with the shared `@koshko/emitter` helper.
 
 ## Notes
 

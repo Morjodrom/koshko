@@ -1,18 +1,18 @@
 import {
-  createActorFlowWindowMessageV1,
-  normalizeActorFlowSignalV1,
+  createKoshkoWindowMessageV1,
+  normalizeKoshkoSignalV1,
   normalizeActorReference,
-  type ActorFlowSeverity,
-  type ActorFlowSignalV1,
+  type KoshkoSeverity,
+  type KoshkoSignalV1,
   type ActorReference,
-} from '@actor-flow/protocol';
+} from '@koshko/protocol';
 
 export interface ActorEmitterOptions extends ActorReference {
   producerId?: string;
 }
 
 export interface EmitOptions {
-  severity?: ActorFlowSeverity;
+  severity?: KoshkoSeverity;
   correlationId?: string;
   causedBy?: string;
   tags?: readonly string[];
@@ -23,21 +23,21 @@ export interface EmitOptions {
 export interface ActorEmitter {
   readonly source: ActorReference;
   readonly producerId: string;
-  event(name: string, details?: unknown, options?: EmitOptions): ActorFlowSignalV1;
-  to(target: ActorReference | string, name: string, details?: unknown, options?: EmitOptions): ActorFlowSignalV1;
+  event(name: string, details?: unknown, options?: EmitOptions): KoshkoSignalV1;
+  to(target: ActorReference | string, name: string, details?: unknown, options?: EmitOptions): KoshkoSignalV1;
 }
 
-const CHANNEL = 'actor-flow';
+const CHANNEL = 'koshko';
 
 export function createActorEmitter(options: ActorEmitterOptions): ActorEmitter {
   const source = normalizeActorReference(options);
   const producerId = normalizeProducerId(options.producerId ?? createDefaultProducerId(source.id));
   let producerSequence = 0;
 
-  function emit(target: ActorReference | string | undefined, name: string, details?: unknown, emitOptions?: EmitOptions): ActorFlowSignalV1 {
+  function emit(target: ActorReference | string | undefined, name: string, details?: unknown, emitOptions?: EmitOptions): KoshkoSignalV1 {
     producerSequence += 1;
     const occurredAt = typeof emitOptions?.occurredAt === 'number' ? emitOptions.occurredAt : now();
-    const signal = normalizeActorFlowSignalV1({
+    const signal = normalizeKoshkoSignalV1({
       protocol: CHANNEL,
       version: 1,
       id: createSignalId(producerId, producerSequence, occurredAt),
@@ -75,14 +75,14 @@ function normalizeTarget(target: ActorReference | string): ActorReference {
   return typeof target === 'string' ? normalizeActorReference({ id: target }) : normalizeActorReference(target);
 }
 
-function postWindowMessage(signal: ActorFlowSignalV1): void {
+function postWindowMessage(signal: KoshkoSignalV1): void {
   try {
     const currentWindow = globalThis.window;
     if (!currentWindow || typeof currentWindow.postMessage !== 'function') {
       return;
     }
 
-    currentWindow.postMessage(createActorFlowWindowMessageV1(signal), '*');
+    currentWindow.postMessage(createKoshkoWindowMessageV1(signal), '*');
   } catch {
     // Safe failure: the emitter must never throw into application code.
   }

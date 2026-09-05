@@ -1,5 +1,5 @@
 {
-  "name": "@actor-flow/protocol",
+  "name": "@koshko/protocol",
   "private": true,
   "type": "module",
   "main": "./src/index.ts",

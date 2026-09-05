@@ -1,5 +1,5 @@
 {
-  "name": "@actor-flow/extension",
+  "name": "@koshko/extension",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -9,7 +9,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "@actor-flow/protocol": "file:../../packages/protocol",
+    "@koshko/protocol": "file:../../packages/protocol",
     "vue": "^3.5.13"
   }
 }

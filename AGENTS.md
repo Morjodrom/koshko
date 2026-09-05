@@ -6,9 +6,9 @@ This is an npm-workspaces TypeScript prototype. Keep shared behavior in `package
 
 - `apps/extension/` contains the WXT Manifest V3 extension. Browser entry points live in `entrypoints/`; implementation, UI, styles, and tests live in `src/`.
 - `packages/protocol/` owns signal types, validation, and normalization.
-- `packages/emitter/` exposes the page-side `actor-flow` emitter.
+- `packages/emitter/` exposes the page-side `koshko` emitter.
 - `examples/neutral-demo/` is the Vite test page used for manual extension checks.
-- `actor-flow-devtools-requirements.md` records requirements. Do not commit generated `.output/`, `.wxt/`, `dist/`, or `coverage/` directories.
+- `koshko-devtools-requirements.md` records requirements. Do not commit generated `.output/`, `.wxt/`, `dist/`, or `coverage/` directories.
 
 ## Build, Test, and Development Commands
 
@@ -20,7 +20,7 @@ Run commands from the repository root:
 - `npm test` runs every workspace's Vitest suite.
 - `npm run typecheck` runs strict TypeScript checks across workspaces without emitting files.
 
-For a focused check, use `npm test --workspace=@actor-flow/protocol`.
+For a focused check, use `npm test --workspace=@koshko/protocol`.
 
 ## Coding Style & Naming Conventions
 

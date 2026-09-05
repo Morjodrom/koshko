@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { compareCapturedSignals, normalizeActorFlowSignalV1, normalizeJsonValue, normalizeCapturedSignalV1 } from './index';
+import { compareCapturedSignals, normalizeKoshkoSignalV1, normalizeJsonValue, normalizeCapturedSignalV1 } from './index';
 
 describe('protocol normalization', () => {
   it('redacts sensitive keys, strips URL queries, and preserves markers', () => {
     const circular: Record<string, unknown> = { ok: true };
     circular.self = circular;
 
-    const signal = normalizeActorFlowSignalV1({
+    const signal = normalizeKoshkoSignalV1({
       id: 'signal-1',
       producerId: 'producer-1',
       producerSequence: 1,

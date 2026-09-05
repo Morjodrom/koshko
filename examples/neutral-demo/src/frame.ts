@@ -1,4 +1,4 @@
-import { createActorEmitter } from '@actor-flow/emitter';
+import { createActorEmitter } from '@koshko/emitter';
 
 const params = new URLSearchParams(window.location.search);
 const instance = params.get('instance') ?? 'frame';

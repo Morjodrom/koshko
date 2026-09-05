@@ -1,7 +1,7 @@
 import { createApp, defineComponent, h, onBeforeUnmount, ref } from 'vue';
-import type { CapturedSignalV1 } from '@actor-flow/protocol';
+import type { CapturedSignalV1 } from '@koshko/protocol';
 import { PANEL_MESSAGE_CAPTURE, PANEL_MESSAGE_CLEAR, PANEL_MESSAGE_SET_PAUSED, PANEL_PORT_PREFIX } from './shared';
-import { ActorFlowRepository, actorKey, formatActor, formatDateTime, formatTime, type ActorFlowTimelineActor } from './repository';
+import { KoshkoRepository, actorKey, formatActor, formatDateTime, formatTime, type KoshkoTimelineActor } from './repository';
 import './ui.css';
 
 const mountTarget = document.querySelector<HTMLDivElement>('#app');
@@ -15,7 +15,7 @@ if (!Number.isFinite(tabId) || tabId < 0) {
   throw new Error('Missing inspected tab id.');
 }
 
-const repository = new ActorFlowRepository();
+const repository = new KoshkoRepository();
 const port = chrome.runtime.connect({ name: `${PANEL_PORT_PREFIX}${tabId}` });
 
 const hh: any = h;
@@ -42,7 +42,7 @@ const Panel = defineComponent({
         return;
       }
 
-      repository.record(message.captured as Parameters<ActorFlowRepository['record']>[0]);
+      repository.record(message.captured as Parameters<KoshkoRepository['record']>[0]);
       if (!repository.isPaused) {
         syncFromRepository();
       } else {
@@ -71,7 +71,7 @@ const Panel = defineComponent({
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
-      link.download = 'actor-flow.jsonl';
+      link.download = 'koshko.jsonl';
       link.click();
       URL.revokeObjectURL(url);
     };
@@ -141,7 +141,7 @@ createApp(Panel).mount(mountTarget);
 
 function renderTimeline(
   signals: CapturedSignalV1[],
-  actors: ActorFlowTimelineActor[],
+  actors: KoshkoTimelineActor[],
 ): any {
   if (signals.length === 0) {
     return hh('p', { class: 'empty' }, 'No signals yet.');

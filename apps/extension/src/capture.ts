@@ -1,4 +1,4 @@
-import { parseActorFlowWindowMessageV1 } from '@actor-flow/protocol';
+import { parseKoshkoWindowMessageV1 } from '@koshko/protocol';
 import { PANEL_MESSAGE_CAPTURE } from './shared';
 
 export function startCapture(): void {
@@ -9,7 +9,7 @@ export function startCapture(): void {
       return;
     }
 
-    const parsed = parseActorFlowWindowMessageV1(event.data);
+    const parsed = parseKoshkoWindowMessageV1(event.data);
     if (!parsed) {
       return;
     }

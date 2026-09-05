@@ -1,4 +1,4 @@
-import { normalizeCapturedSignalV1 } from '@actor-flow/protocol';
+import { normalizeCapturedSignalV1 } from '@koshko/protocol';
 import {
   PANEL_MESSAGE_CAPTURE,
   PANEL_MESSAGE_SYNC_ORIGINS,

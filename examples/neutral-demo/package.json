@@ -1,5 +1,5 @@
 {
-  "name": "@actor-flow/neutral-demo",
+  "name": "@koshko/neutral-demo",
   "private": true,
   "type": "module",
   "scripts": {
@@ -7,7 +7,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "@actor-flow/emitter": "file:../../packages/emitter"
+    "@koshko/emitter": "file:../../packages/emitter"
   },
   "devDependencies": {
     "typescript": "^5.7.3",

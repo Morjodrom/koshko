@@ -14,14 +14,14 @@ describe('actor emitter', () => {
     const emitter = createActorEmitter({ id: 'host', label: 'Host application', producerId: 'producer-host' });
     const signal = emitter.to('widget', 'payment.start', { amount: 42 }, { severity: 'info', correlationId: 'corr-1', tags: ['checkout'] });
 
-    expect(signal.protocol).toBe('actor-flow');
+    expect(signal.protocol).toBe('koshko');
     expect(signal.version).toBe(1);
     expect(signal.producerSequence).toBe(1);
     expect(signal.producerId).toBe('producer-host');
     expect(postMessage).toHaveBeenCalledTimes(1);
     expect(postMessage).toHaveBeenCalledWith(
       expect.objectContaining({
-        protocol: 'actor-flow',
+        protocol: 'koshko',
         version: 1,
         type: 'signal',
         signal: expect.objectContaining({

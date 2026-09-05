@@ -1,6 +1,6 @@
 import type {
-  ActorFlowSignalV1,
-  ActorFlowWindowMessageV1,
+  KoshkoSignalV1,
+  KoshkoWindowMessageV1,
   ActorReference,
   CapturedSignalV1,
   JsonValue,
@@ -67,10 +67,10 @@ export function normalizeActorReference(input: unknown): ActorReference {
   return result;
 }
 
-export function normalizeActorFlowSignalV1(input: unknown): ActorFlowSignalV1 {
+export function normalizeKoshkoSignalV1(input: unknown): KoshkoSignalV1 {
   const record = isObjectLike(input) ? input : {};
-  const signal: ActorFlowSignalV1 = {
-    protocol: 'actor-flow',
+  const signal: KoshkoSignalV1 = {
+    protocol: 'koshko',
     version: 1,
     id: normalizeIdentifier((record as Record<string, unknown>).id, INVALID_VALUE),
     producerId: normalizeIdentifier((record as Record<string, unknown>).producerId, INVALID_VALUE),
@@ -123,7 +123,7 @@ export function normalizeActorFlowSignalV1(input: unknown): ActorFlowSignalV1 {
 
 export function normalizeCapturedSignalV1(input: unknown): CapturedSignalV1 {
   const record = isObjectLike(input) ? input : {};
-  const signal = normalizeActorFlowSignalV1((record as Record<string, unknown>).signal);
+  const signal = normalizeKoshkoSignalV1((record as Record<string, unknown>).signal);
   const observedAt = normalizeTimestamp((record as Record<string, unknown>).observedAt);
   const tabId = normalizeFrameNumber((record as Record<string, unknown>).tabId);
   const frameId = normalizeFrameNumber((record as Record<string, unknown>).frameId);
@@ -149,9 +149,9 @@ export function normalizeCapturedSignalV1(input: unknown): CapturedSignalV1 {
   return captured;
 }
 
-export function createActorFlowWindowMessageV1(signal: ActorFlowSignalV1): ActorFlowWindowMessageV1 {
+export function createKoshkoWindowMessageV1(signal: KoshkoSignalV1): KoshkoWindowMessageV1 {
   return {
-    protocol: 'actor-flow',
+    protocol: 'koshko',
     version: 1,
     type: 'signal',
     signal,
@@ -186,7 +186,7 @@ export function compareCapturedSignals(left: CapturedSignalV1, right: CapturedSi
   return left.signal.id.localeCompare(right.signal.id);
 }
 
-function compactSignal(signal: ActorFlowSignalV1): ActorFlowSignalV1 {
+function compactSignal(signal: KoshkoSignalV1): KoshkoSignalV1 {
   let current = signal;
   for (let pass = 0; pass < 3; pass += 1) {
     if (approximateJsonLength(current) <= MAX_SERIALIZED_BYTES) {
@@ -457,7 +457,7 @@ function limitCodePoints(text: string, maxCodePoints: number): string {
   return codePoints.slice(0, maxCodePoints).join('');
 }
 
-function normalizeSeverity(input: unknown): ActorFlowSignalV1['severity'] | undefined {
+function normalizeSeverity(input: unknown): KoshkoSignalV1['severity'] | undefined {
   switch (input) {
     case 'debug':
     case 'info':

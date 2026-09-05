@@ -1,17 +1,17 @@
-import actorFlowSignalV1Schema from './actor-flow-signal-v1.schema.json';
-import type { ActorFlowSignalV1, ActorFlowWindowMessageV1, CapturedSignalV1 } from './types';
-import { normalizeActorFlowSignalV1, normalizeCapturedSignalV1 } from './normalize';
+import koshkoSignalV1Schema from './koshko-signal-v1.schema.json';
+import type { KoshkoSignalV1, KoshkoWindowMessageV1, CapturedSignalV1 } from './types';
+import { normalizeKoshkoSignalV1, normalizeCapturedSignalV1 } from './normalize';
 
-export const actorFlowSignalV1JsonSchema = actorFlowSignalV1Schema;
+export const koshkoSignalV1JsonSchema = koshkoSignalV1Schema;
 
-export function isActorReference(value: unknown): value is ActorFlowSignalV1['source'] {
+export function isActorReference(value: unknown): value is KoshkoSignalV1['source'] {
   if (!isObjectLike(value)) {
     return false;
   }
   return typeof value.id === 'string' && value.id.length > 0;
 }
 
-export function isActorFlowSignalV1(value: unknown): value is ActorFlowSignalV1 {
+export function isKoshkoSignalV1(value: unknown): value is KoshkoSignalV1 {
   if (!isObjectLike(value)) {
     return false;
   }
@@ -19,7 +19,7 @@ export function isActorFlowSignalV1(value: unknown): value is ActorFlowSignalV1 
   const producerSequence = value.producerSequence;
 
   return (
-    value.protocol === 'actor-flow' &&
+    value.protocol === 'koshko' &&
     value.version === 1 &&
     typeof value.id === 'string' &&
     value.id.length > 0 &&
@@ -40,24 +40,24 @@ export function isActorFlowSignalV1(value: unknown): value is ActorFlowSignalV1 
   );
 }
 
-export function isActorFlowWindowMessageV1(value: unknown): value is ActorFlowWindowMessageV1 {
+export function isKoshkoWindowMessageV1(value: unknown): value is KoshkoWindowMessageV1 {
   if (!isObjectLike(value)) {
     return false;
   }
 
-  return value.protocol === 'actor-flow' && value.version === 1 && value.type === 'signal' && isActorFlowSignalV1(value.signal);
+  return value.protocol === 'koshko' && value.version === 1 && value.type === 'signal' && isKoshkoSignalV1(value.signal);
 }
 
-export function parseActorFlowWindowMessageV1(value: unknown): ActorFlowWindowMessageV1 | undefined {
-  if (!isActorFlowWindowMessageV1(value)) {
+export function parseKoshkoWindowMessageV1(value: unknown): KoshkoWindowMessageV1 | undefined {
+  if (!isKoshkoWindowMessageV1(value)) {
     return undefined;
   }
 
   return {
-    protocol: 'actor-flow',
+    protocol: 'koshko',
     version: 1,
     type: 'signal',
-    signal: normalizeActorFlowSignalV1(value.signal),
+    signal: normalizeKoshkoSignalV1(value.signal),
   };
 }
 
@@ -65,7 +65,7 @@ export function parseCapturedSignalV1(value: unknown): CapturedSignalV1 {
   return normalizeCapturedSignalV1(value);
 }
 
-function isSeverity(value: unknown): value is NonNullable<ActorFlowSignalV1['severity']> {
+function isSeverity(value: unknown): value is NonNullable<KoshkoSignalV1['severity']> {
   return value === 'debug' || value === 'info' || value === 'success' || value === 'warning' || value === 'error';
 }
 

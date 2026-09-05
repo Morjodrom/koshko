@@ -1,6 +1,6 @@
 # Neutral demo
 
-Development-only, disposable Vite demo for Actor Flow.
+Development-only, disposable Vite demo for Koshko Dev Tools.
 
 ## Run
 
@@ -24,7 +24,7 @@ npm run dev:demo
 5. Select `apps/extension/.output/chrome-mv3-dev/chrome-mv3`.
 6. Open the extension's **Options** page and grant `http://127.0.0.1:5173`.
 7. Open or reload the demo at `http://127.0.0.1:5173`.
-8. Open Chrome DevTools, select **Actor Flow**, then use the page controls to emit signals.
+8. Open Chrome DevTools, select **Koshko Dev Tools**, then use the page controls to emit signals.
 
 ## Notes
 

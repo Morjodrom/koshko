@@ -1,7 +1,7 @@
 export type {
-  ActorFlowSeverity,
-  ActorFlowSignalV1,
-  ActorFlowWindowMessageV1,
+  KoshkoSeverity,
+  KoshkoSignalV1,
+  KoshkoWindowMessageV1,
   ActorReference,
   CapturedSignalV1,
   JsonArray,
@@ -9,19 +9,19 @@ export type {
   JsonPrimitive,
   JsonValue,
 } from './types';
-export { actorFlowSignalV1JsonSchema } from './validate';
+export { koshkoSignalV1JsonSchema } from './validate';
 export {
   compareCapturedSignals,
-  createActorFlowWindowMessageV1,
-  normalizeActorFlowSignalV1,
+  createKoshkoWindowMessageV1,
+  normalizeKoshkoSignalV1,
   normalizeActorReference,
   normalizeCapturedSignalV1,
   normalizeJsonValue,
 } from './normalize';
 export {
-  isActorFlowSignalV1,
-  isActorFlowWindowMessageV1,
+  isKoshkoSignalV1,
+  isKoshkoWindowMessageV1,
   isActorReference,
-  parseActorFlowWindowMessageV1,
+  parseKoshkoWindowMessageV1,
   parseCapturedSignalV1,
 } from './validate';

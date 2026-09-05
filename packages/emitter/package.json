@@ -1,5 +1,5 @@
 {
-  "name": "@actor-flow/emitter",
+  "name": "@koshko/emitter",
   "private": true,
   "type": "module",
   "main": "./src/index.ts",
@@ -13,6 +13,6 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "@actor-flow/protocol": "file:../protocol"
+    "@koshko/protocol": "file:../protocol"
   }
 }

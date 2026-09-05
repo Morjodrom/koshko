@@ -1,5 +1,5 @@
 {
-  "name": "actor-flow-devtools-prototype",
+  "name": "koshko-devtools-prototype",
   "private": true,
   "workspaces": [
     "apps/*",
@@ -7,8 +7,8 @@
     "examples/*"
   ],
   "scripts": {
-    "dev:extension": "npm run dev --workspace=@actor-flow/extension",
-    "dev:demo": "npm run dev --workspace=@actor-flow/neutral-demo",
+    "dev:extension": "npm run dev --workspace=@koshko/extension",
+    "dev:demo": "npm run dev --workspace=@koshko/neutral-demo",
     "test": "npm run test --workspaces --if-present",
     "typecheck": "npm run typecheck --workspaces --if-present"
   },

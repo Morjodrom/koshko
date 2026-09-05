@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://actor-flow.dev/schemas/actor-flow-signal-v1.json",
-  "title": "ActorFlowSignalV1",
+  "$id": "https://koshko.dev/schemas/koshko-signal-v1.json",
+  "title": "KoshkoSignalV1",
   "type": "object",
   "additionalProperties": true,
   "required": [
@@ -16,7 +16,7 @@
   ],
   "properties": {
     "protocol": {
-      "const": "actor-flow"
+      "const": "koshko"
     },
     "version": {
       "const": 1

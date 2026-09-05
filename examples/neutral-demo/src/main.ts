@@ -1,4 +1,4 @@
-import { createActorEmitter } from '@actor-flow/emitter';
+import { createActorEmitter } from '@koshko/emitter';
 
 const userEmitter = createActorEmitter({ id: 'user', label: 'User' });
 const hostEmitter = createActorEmitter({ id: 'host', label: 'Host' });

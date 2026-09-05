@@ -6,7 +6,7 @@ describe('extension transport helpers', () => {
     expect(normalizeOrigin('https://example.com/path?x=1')).toBe('https://example.com');
     expect(originToMatchPattern('https://example.com')).toBe('https://example.com/*');
     expect(originToMatchPattern('http://127.0.0.1:5173')).toBe('http://127.0.0.1/*');
-    expect(originToScriptId('https://example.com')).toMatch(/^actor-flow-/);
+    expect(originToScriptId('https://example.com')).toMatch(/^koshko-/);
     expect(normalizeOriginList(['https://example.com/path', 'https://example.com'])).toEqual(['https://example.com']);
   });
 });

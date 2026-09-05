@@ -1,11 +1,11 @@
-import { compareCapturedSignals, type ActorReference, type CapturedSignalV1 } from '@actor-flow/protocol';
+import { compareCapturedSignals, type ActorReference, type CapturedSignalV1 } from '@koshko/protocol';
 
-export interface ActorFlowTimelineActor {
+export interface KoshkoTimelineActor {
   key: string;
   reference: ActorReference;
 }
 
-export class ActorFlowRepository {
+export class KoshkoRepository {
   private readonly capturedSignals: CapturedSignalV1[] = [];
 
   private paused = false;
@@ -88,8 +88,8 @@ export class ActorFlowRepository {
     return this.capturedSignals.length;
   }
 
-  getActorColumns(): ActorFlowTimelineActor[] {
-    const columns: ActorFlowTimelineActor[] = [];
+  getActorColumns(): KoshkoTimelineActor[] {
+    const columns: KoshkoTimelineActor[] = [];
     const seen = new Set<string>();
 
     for (const signal of this.getSignals()) {
@@ -109,7 +109,7 @@ export class ActorFlowRepository {
   exportJsonl(): string {
     const signals = this.getSignals();
     const header = {
-      protocol: 'actor-flow',
+      protocol: 'koshko',
       version: 1,
       type: 'export-metadata',
       count: signals.length,

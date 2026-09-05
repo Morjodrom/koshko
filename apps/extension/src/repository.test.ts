@@ -1,13 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { ActorFlowRepository, actorKey, formatTimestamp } from './repository';
+import { KoshkoRepository, actorKey, formatTimestamp } from './repository';
 
-describe('actor flow repository', () => {
+describe('koshko dev tools repository', () => {
   it('keeps signals chronological and clears on a new top-frame document identity', () => {
-    const repo = new ActorFlowRepository();
+    const repo = new KoshkoRepository();
 
     repo.record({
       signal: {
-        protocol: 'actor-flow',
+        protocol: 'koshko',
         version: 1,
         id: 'sub-1',
         producerId: 'p',
@@ -26,7 +26,7 @@ describe('actor flow repository', () => {
 
     repo.record({
       signal: {
-        protocol: 'actor-flow',
+        protocol: 'koshko',
         version: 1,
         id: 'top-1',
         producerId: 'p',
@@ -45,7 +45,7 @@ describe('actor flow repository', () => {
 
     repo.record({
       signal: {
-        protocol: 'actor-flow',
+        protocol: 'koshko',
         version: 1,
         id: 'top-2',
         producerId: 'p',
@@ -67,11 +67,11 @@ describe('actor flow repository', () => {
   });
 
   it('freezes the display while paused, clears, and exports JSONL metadata', () => {
-    const repo = new ActorFlowRepository();
+    const repo = new KoshkoRepository();
 
     repo.record({
       signal: {
-        protocol: 'actor-flow',
+        protocol: 'koshko',
         version: 1,
         id: 'kept-1',
         producerId: 'p',
@@ -93,7 +93,7 @@ describe('actor flow repository', () => {
     repo.setPaused(true);
     repo.record({
       signal: {
-        protocol: 'actor-flow',
+        protocol: 'koshko',
         version: 1,
         id: 'kept-2',
         producerId: 'p',
@@ -119,7 +119,7 @@ describe('actor flow repository', () => {
 
     const lines = repo.exportJsonl().split('\n');
     expect(lines[0]).toContain('"type":"export-metadata"');
-    expect(lines[0]).toContain('"protocol":"actor-flow"');
+    expect(lines[0]).toContain('"protocol":"koshko"');
     expect(lines[1]).toContain('"id":"kept-1"');
     repo.clear();
     expect(repo.getCount()).toBe(0);

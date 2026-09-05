@@ -1,1 +1,1 @@
-export { actorFlowSignalV1JsonSchema } from './validate';
+export { koshkoSignalV1JsonSchema } from './validate';

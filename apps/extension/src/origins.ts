@@ -12,7 +12,7 @@ export function originToMatchPattern(origin: string): string {
 }
 
 export function originToScriptId(origin: string): string {
-  return `actor-flow-${origin.replace(/[^a-z0-9]+/gi, '-').replace(/^-+|-+$/g, '').toLowerCase() || 'origin'}`;
+  return `koshko-${origin.replace(/[^a-z0-9]+/gi, '-').replace(/^-+|-+$/g, '').toLowerCase() || 'origin'}`;
 }
 
 export function normalizeOriginList(values: string[]): string[] {

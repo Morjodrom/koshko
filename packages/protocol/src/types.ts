@@ -5,7 +5,7 @@ export interface JsonObject {
 }
 export type JsonArray = JsonValue[];
 
-export type ActorFlowSeverity = 'debug' | 'info' | 'success' | 'warning' | 'error';
+export type KoshkoSeverity = 'debug' | 'info' | 'success' | 'warning' | 'error';
 
 export interface ActorReference {
   id: string;
@@ -14,8 +14,8 @@ export interface ActorReference {
   instanceLabel?: string;
 }
 
-export interface ActorFlowSignalV1 {
-  protocol: 'actor-flow';
+export interface KoshkoSignalV1 {
+  protocol: 'koshko';
   version: 1;
   id: string;
   producerId: string;
@@ -24,7 +24,7 @@ export interface ActorFlowSignalV1 {
   source: ActorReference;
   target?: ActorReference;
   name: string;
-  severity?: ActorFlowSeverity;
+  severity?: KoshkoSeverity;
   details?: JsonValue;
   context?: Record<string, string>;
   correlationId?: string;
@@ -33,7 +33,7 @@ export interface ActorFlowSignalV1 {
 }
 
 export interface CapturedSignalV1 {
-  signal: ActorFlowSignalV1;
+  signal: KoshkoSignalV1;
   observedAt: number;
   tabId: number;
   frameId: number;
@@ -43,9 +43,9 @@ export interface CapturedSignalV1 {
   frameOrigin: string;
 }
 
-export interface ActorFlowWindowMessageV1 {
-  protocol: 'actor-flow';
+export interface KoshkoWindowMessageV1 {
+  protocol: 'koshko';
   version: 1;
   type: 'signal';
-  signal: ActorFlowSignalV1;
+  signal: KoshkoSignalV1;
 }
