@@ -16,7 +16,7 @@ body {
 }
 
 .shell {
-  max-width: 760px;
+  max-width: 1440px;
   margin: 0 auto;
   padding: 24px;
 }
@@ -148,43 +148,237 @@ button.ghost {
 }
 
 .timeline {
-  display: grid;
-  gap: 12px;
+  --timeline-gutter-width: 140px;
+  --timeline-lane-width: 180px;
+  --timeline-line: color-mix(in srgb, CanvasText 52%, Canvas 48%);
+  max-height: calc(100vh - 230px);
+  min-height: 180px;
+  overflow: auto;
+  isolation: isolate;
 }
 
 .timeline-headers,
 .timeline-row {
   display: grid;
-  grid-template-columns: 180px minmax(0, 1fr);
-  gap: 12px;
+  grid-template-columns: var(--timeline-gutter-width) minmax(
+    calc(var(--timeline-actor-count) * var(--timeline-lane-width)),
+    1fr
+  );
+  min-width: calc(
+    var(--timeline-gutter-width) + var(--timeline-actor-count) * var(--timeline-lane-width)
+  );
 }
 
 .timeline-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
-  gap: 8px;
+  grid-template-columns: repeat(var(--timeline-actor-count), minmax(var(--timeline-lane-width), 1fr));
 }
 
-.timeline-header,
-.timeline-cell {
-  border: 1px solid color-mix(in srgb, CanvasText 14%, Canvas 86%);
-  border-radius: 10px;
-  padding: 8px 10px;
-  min-height: 44px;
+.timeline-headers {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  border-bottom: 1px solid color-mix(in srgb, CanvasText 14%, Canvas 86%);
+  background: color-mix(in srgb, Canvas 97%, CanvasText 3%);
+  box-shadow: 0 8px 16px color-mix(in srgb, CanvasText 6%, transparent);
 }
 
-.timeline-cell.source {
-  background: color-mix(in srgb, AccentColor 12%, Canvas 88%);
+.timeline-header {
+  align-self: center;
+  justify-self: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  width: calc(100% - 28px);
+  min-height: 48px;
+  margin: 12px 14px;
+  padding: 9px 12px;
+  border: 1px solid color-mix(in srgb, AccentColor 38%, CanvasText 14%);
+  border-radius: 5px;
+  background: color-mix(in srgb, AccentColor 8%, Canvas 92%);
+  box-shadow: 0 2px 6px color-mix(in srgb, CanvasText 8%, transparent);
+  text-align: center;
 }
 
-.timeline-cell.target {
-  background: color-mix(in srgb, CanvasText 8%, Canvas 92%);
+.timeline-actor-label {
+  min-width: 0;
+  overflow: hidden;
+  font-weight: 650;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.timeline-instance-badge {
+  flex: 0 0 auto;
+  max-width: 72px;
+  overflow: hidden;
+  padding: 2px 6px;
+  border-radius: 999px;
+  background: color-mix(in srgb, AccentColor 16%, Canvas 84%);
+  color: color-mix(in srgb, CanvasText 82%, AccentColor 18%);
+  font-size: 11px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .timeline-stamp {
-  padding: 8px 0;
+  position: sticky;
+  left: 0;
+  z-index: 8;
   display: grid;
-  gap: 4px;
+  align-content: center;
+  gap: 3px;
+  min-width: var(--timeline-gutter-width);
+  padding: 10px 14px;
+  border-right: 1px solid color-mix(in srgb, CanvasText 12%, Canvas 88%);
+  background: color-mix(in srgb, Canvas 97%, CanvasText 3%);
+  font-size: 12px;
+}
+
+.timeline-stamp strong {
+  font-variant-numeric: tabular-nums;
+}
+
+.timeline-row {
+  position: relative;
+  grid-template-rows: minmax(76px, auto) auto;
+  border-bottom: 1px solid color-mix(in srgb, CanvasText 8%, Canvas 92%);
+}
+
+.timeline-row:last-child {
+  border-bottom: 0;
+}
+
+.timeline-row > .timeline-stamp,
+.timeline-row > .timeline-grid,
+.timeline-arrow {
+  grid-row: 1;
+}
+
+.timeline-row > .timeline-grid,
+.timeline-arrow,
+.timeline-details {
+  grid-column: 2;
+}
+
+.timeline-cell {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 76px;
+}
+
+.timeline-cell::before {
+  position: absolute;
+  inset-block: 0;
+  left: 50%;
+  z-index: 0;
+  border-left: 1px dashed color-mix(in srgb, CanvasText 20%, Canvas 80%);
+  content: '';
+}
+
+.timeline-event-control {
+  --event-accent: color-mix(in srgb, AccentColor 70%, CanvasText 30%);
+  position: relative;
+  z-index: 5;
+  max-width: calc(100% - 20px);
+  overflow: hidden;
+  padding: 5px 9px;
+  border-color: color-mix(in srgb, var(--event-accent) 55%, Canvas 45%);
+  border-radius: 5px;
+  background: color-mix(in srgb, var(--event-accent) 10%, Canvas 90%);
+  box-shadow: 0 1px 4px color-mix(in srgb, CanvasText 8%, transparent);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 12px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  transform: translateY(-18px);
+}
+
+.timeline-row.internal .timeline-event-control {
+  transform: none;
+}
+
+.timeline-event-control:hover,
+.timeline-event-control:focus-visible {
+  border-color: var(--event-accent);
+  outline: 2px solid color-mix(in srgb, var(--event-accent) 32%, transparent);
+  outline-offset: 2px;
+}
+
+.timeline-event-control.severity-debug {
+  --event-accent: color-mix(in srgb, CanvasText 56%, Canvas 44%);
+}
+
+.timeline-event-control.severity-success {
+  --event-accent: #2c8a57;
+}
+
+.timeline-event-control.severity-warning {
+  --event-accent: #b66a00;
+}
+
+.timeline-event-control.severity-error {
+  --event-accent: #c53d4a;
+}
+
+.timeline-arrow {
+  position: relative;
+  z-index: 2;
+  pointer-events: none;
+}
+
+.timeline-arrow::before {
+  position: absolute;
+  top: 50%;
+  left: var(--timeline-arrow-start);
+  width: var(--timeline-arrow-width);
+  border-top: 2px solid var(--timeline-line);
+  content: '';
+}
+
+.timeline-arrow::after {
+  position: absolute;
+  top: 50%;
+  width: 0;
+  height: 0;
+  border-top: 6px solid transparent;
+  border-bottom: 6px solid transparent;
+  content: '';
+}
+
+.timeline-arrow.forward::after {
+  left: calc(var(--timeline-arrow-start) + var(--timeline-arrow-width));
+  border-left: 9px solid var(--timeline-line);
+  transform: translate(-100%, -50%);
+}
+
+.timeline-arrow.reverse::after {
+  left: var(--timeline-arrow-start);
+  border-right: 9px solid var(--timeline-line);
+  transform: translateY(-50%);
+}
+
+.timeline-details {
+  grid-row: 2;
+  margin: 0 14px 14px;
+  overflow: auto;
+  border: 1px solid color-mix(in srgb, CanvasText 14%, Canvas 86%);
+  border-radius: 7px;
+  background: color-mix(in srgb, Canvas 92%, CanvasText 8%);
+}
+
+.timeline-details pre {
+  margin: 0;
+  padding: 12px;
+  font-size: 12px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 
 .log {
@@ -214,4 +408,25 @@ button.ghost {
   margin: 12px 0 0;
   white-space: pre-wrap;
   word-break: break-word;
+}
+
+@media (max-width: 700px) {
+  .shell {
+    padding: 12px;
+  }
+
+  .toolbar {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .actions {
+    flex-wrap: wrap;
+  }
+
+  .timeline {
+    --timeline-gutter-width: 118px;
+    --timeline-lane-width: 160px;
+    max-height: calc(100vh - 260px);
+  }
 }

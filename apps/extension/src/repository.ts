@@ -146,12 +146,14 @@ export function actorKey(reference: ActorReference): string {
 }
 
 export function formatActor(reference: ActorReference): string {
-  const base = reference.instanceLabel ? `${reference.label ?? reference.id} · ${reference.instanceLabel}` : reference.label ?? reference.id;
+  const instanceLabel = reference.instanceLabel ?? reference.instanceId;
+  const base = instanceLabel ? `${reference.label ?? reference.id} · ${instanceLabel}` : reference.label ?? reference.id;
   return base || reference.id;
 }
 
 export function formatTime(occurredAt: number): string {
-  return formatTimestamp(occurredAt);
+  const date = new Date(occurredAt);
+  return `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}:${String(date.getSeconds()).padStart(2, '0')}.${String(date.getMilliseconds()).padStart(3, '0')}`;
 }
 
 export function formatDateTime(occurredAt: number): string {

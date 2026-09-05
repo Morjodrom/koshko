@@ -95,7 +95,7 @@ describe('PanelApp', () => {
   it('renders actor instances, directed messages, and internal messages in the timeline', async () => {
     const { port, wrapper } = mountPanel();
     const widgetEmbedded = { id: 'widget', label: 'Widget', instanceId: 'embedded', instanceLabel: 'embedded' };
-    const widgetProcessing = { id: 'widget', label: 'Widget', instanceId: 'processing', instanceLabel: 'processing' };
+    const widgetProcessing = { id: 'widget', label: 'Widget', instanceId: 'processing' };
 
     port.emitCapture(captured({
       signal: {
@@ -129,9 +129,21 @@ describe('PanelApp', () => {
     }));
     await nextTick();
 
-    expect(wrapper.get('[data-testid="timeline"]').text()).toContain('Widget · embedded');
-    expect(wrapper.get('[data-testid="timeline"]').text()).toContain('Widget · processing');
-    expect(wrapper.get('[data-signal-name="host.open-widget"] [data-actor-key="widget::embedded"]').text()).toContain('→ Widget · embedded');
+    expect(wrapper.get('[data-testid="timeline"]').text()).toContain('Widget');
+    expect(wrapper.findAll('[data-testid="actor-instance-badge"]').map((badge) => badge.text())).toEqual(['embedded', 'processing']);
+    const forward = wrapper.get('[data-signal-name="host.open-widget"]');
+    const forwardArrow = forward.get('[data-testid="timeline-arrow"]');
+    expect(forward.attributes('data-direction')).toBe('forward');
+    expect(forward.attributes('data-source-index')).toBe('0');
+    expect(forward.attributes('data-target-index')).toBe('1');
+    expect(forward.attributes('data-actor-count')).toBe('3');
+    expect(forwardArrow.attributes('data-source-actor-key')).toBe('host::');
+    expect(forwardArrow.attributes('data-target-actor-key')).toBe('widget::embedded');
+    expect(forwardArrow.attributes('aria-label')).toBe('Host application sends host.open-widget to Widget · embedded');
+    expect(forwardArrow.classes()).toContain('forward');
+    expect(forwardArrow.attributes('style')).toContain('--timeline-source-index: 0');
+    expect(forwardArrow.attributes('style')).toContain('--timeline-arrow-start: 16.666666666666664%');
+    expect(forwardArrow.attributes('style')).toContain('--timeline-arrow-width: 33.333333333333336%');
     const selfTargetedCell = wrapper.get('[data-signal-name="widget.self-transition"] [data-actor-key="widget::processing"]');
     expect(selfTargetedCell.classes()).toContain('source');
     expect(selfTargetedCell.classes()).not.toContain('target');
@@ -140,7 +152,62 @@ describe('PanelApp', () => {
     const targetlessInternalCell = wrapper.get('[data-signal-name="widget.local-cache-updated"] [data-actor-key="widget::embedded"]');
     expect(targetlessInternalCell.classes()).toContain('source');
     expect(targetlessInternalCell.classes()).not.toContain('target');
-    expect(targetlessInternalCell.text()).not.toContain('→');
+    expect(wrapper.findAll('[data-signal-name="widget.self-transition"] [data-testid="timeline-arrow"]')).toHaveLength(0);
+    expect(wrapper.findAll('[data-signal-name="widget.local-cache-updated"] [data-testid="timeline-arrow"]')).toHaveLength(0);
+  });
+
+  it('renders reverse arrows, compact local timestamps, and expandable timeline details', async () => {
+    const { port, wrapper } = mountPanel();
+    const host = { id: 'host', label: 'Host application' };
+    const widget = { id: 'widget', label: 'Widget', instanceId: 'embedded', instanceLabel: 'embedded' };
+    const occurredAt = Date.parse('2026-09-05T12:34:56.789Z');
+
+    port.emitCapture(captured({
+      signal: { ...captured().signal, id: 'host-first', source: host, name: 'host.ready' },
+    }));
+    port.emitCapture(captured({
+      signal: {
+        ...captured().signal,
+        id: 'reverse',
+        producerSequence: 2,
+        occurredAt,
+        source: widget,
+        target: host,
+        name: 'widget.completed',
+        details: { result: 'ok' },
+      },
+    }));
+    await nextTick();
+
+    const row = wrapper.get('[data-signal-name="widget.completed"]');
+    const arrow = row.get('[data-testid="timeline-arrow"]');
+    const local = new Date(occurredAt);
+    const expectedTime = `${String(local.getHours()).padStart(2, '0')}:${String(local.getMinutes()).padStart(2, '0')}:${String(local.getSeconds()).padStart(2, '0')}.${String(local.getMilliseconds()).padStart(3, '0')}`;
+    expect(row.attributes('data-direction')).toBe('reverse');
+    expect(arrow.classes()).toContain('reverse');
+    expect(arrow.attributes('aria-label')).toBe('Widget · embedded sends widget.completed to Host application');
+    expect(row.get('[data-testid="timeline-time"]').text()).toBe(expectedTime);
+    expect(row.get('.timeline-stamp').attributes('title')).toContain('2026-09-05T12:34:56.789Z');
+    expect(row.find('[data-testid="timeline-details"]').exists()).toBe(false);
+
+    const control = row.get('.timeline-event-control');
+    expect(control.attributes('aria-expanded')).toBe('false');
+    expect(control.element.tagName).toBe('BUTTON');
+    await control.trigger('click');
+    await nextTick();
+
+    expect(control.attributes('aria-expanded')).toBe('true');
+    expect(row.get('[data-testid="timeline-details"]').text()).toContain('"result": "ok"');
+
+    const firstEventControl = wrapper.get('[data-signal-name="host.ready"] .timeline-event-control');
+    await firstEventControl.trigger('click');
+    await nextTick();
+    expect(wrapper.findAll('[data-testid="timeline-details"]')).toHaveLength(2);
+
+    await control.trigger('click');
+    await nextTick();
+    expect(row.find('[data-testid="timeline-details"]').exists()).toBe(false);
+    expect(wrapper.findAll('[data-testid="timeline-details"]')).toHaveLength(1);
   });
 
   it('renders signal and capture metadata in the log', async () => {
