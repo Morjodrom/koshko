@@ -1,13 +1,26 @@
 {
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
-    "lib": ["ES2022", "DOM"],
+    "lib": [
+      "ES2022",
+      "DOM"
+    ],
     "noEmit": true,
-    "types": ["vite/client"],
+    "types": [
+      "vite/client"
+    ],
     "baseUrl": ".",
     "paths": {
-      "@koshko/emitter": ["../../packages/emitter/src/index"]
+      "@koshko/emitter": [
+        "../../packages/emitter/src/index"
+      ],
+      "@koshko/protocol": [
+        "../../packages/protocol/src/index"
+      ]
     }
   },
-  "include": ["src", "vite.config.ts"]
+  "include": [
+    "src",
+    "vite.config.ts"
+  ]
 }

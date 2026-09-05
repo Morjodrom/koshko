@@ -1,6 +1,6 @@
 # Neutral demo
 
-Development-only, disposable Vite demo for Koshko Dev Tools.
+Development-only, local Vite fixture for manual Koshko Dev Tools checks and scenario regression tests.
 
 ## Run
 
@@ -8,12 +8,15 @@ Development-only, disposable Vite demo for Koshko Dev Tools.
 npm run dev:demo
 ```
 
-## What it shows
+## Scenarios
 
-- One top page with a `Run flow` button.
-- Exactly two iframe instances of the same `frame.html` page.
-- The top page emits User → Host and Host → Widget signals, then asks both frames to emit Widget → Host signals.
-- Each frame has a button to emit a manual widget event.
+The page creates four actor types: **User**, **Host application**, **Client SDK**, and two **Widget** instances (`embedded` and `processing`). Every top-level button click creates a fresh correlation ID.
+
+- **Successful flow** covers user → host, host → SDK, SDK/host → both widgets, internal widget events, and successful widget → host replies.
+- **Failure and recovery** covers warning/error severity, host and widget self-targeted messages, and a caused-by chain through retry and recovery.
+- **Metadata-rich flow** covers nested details, tags, context, correlations, causes, and diagnostics from both widget instances.
+
+The in-page log is only a local aid; Koshko captures the signals independently from the top page and each iframe. The widget button can also emit a local metadata-rich flow.
 
 ## Install in Google Chrome or Chromium-based browsers
 
@@ -24,10 +27,6 @@ npm run dev:demo
 5. Select `apps/extension/.output/chrome-mv3-dev/chrome-mv3`.
 6. Open the extension's **Options** page and grant `http://127.0.0.1:5173`.
 7. Open or reload the demo at `http://127.0.0.1:5173`.
-8. Open Chrome DevTools, select **Koshko Dev Tools**, then use the page controls to emit signals.
+8. Open Chrome DevTools, select **Koshko Dev Tools**, then run each scenario.
 
-## Notes
-
-- This is a temporary prototype.
-- It intentionally uses only static HTML pages and minimal styling.
-- No production build is provided.
+No production build is provided and no data leaves the browser.
