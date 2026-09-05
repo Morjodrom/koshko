@@ -1,0 +1,129 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://actor-flow.dev/schemas/actor-flow-signal-v1.json",
+  "title": "ActorFlowSignalV1",
+  "type": "object",
+  "additionalProperties": true,
+  "required": [
+    "protocol",
+    "version",
+    "id",
+    "producerId",
+    "producerSequence",
+    "occurredAt",
+    "source",
+    "name"
+  ],
+  "properties": {
+    "protocol": {
+      "const": "actor-flow"
+    },
+    "version": {
+      "const": 1
+    },
+    "id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "producerId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "producerSequence": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "occurredAt": {
+      "type": "number"
+    },
+    "source": {
+      "$ref": "#/$defs/actorReference"
+    },
+    "target": {
+      "$ref": "#/$defs/actorReference"
+    },
+    "name": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "severity": {
+      "enum": ["debug", "info", "success", "warning", "error"]
+    },
+    "details": {
+      "$ref": "#/$defs/jsonValue"
+    },
+    "context": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      }
+    },
+    "correlationId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "causedBy": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "tags": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 128
+      }
+    }
+  },
+  "$defs": {
+    "actorReference": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["id"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "instanceId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "label": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 16384
+        },
+        "instanceLabel": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 16384
+        }
+      }
+    },
+    "jsonValue": {
+      "anyOf": [
+        { "type": "string" },
+        { "type": "number" },
+        { "type": "integer" },
+        { "type": "boolean" },
+        { "type": "null" },
+        {
+          "type": "array",
+          "items": { "$ref": "#/$defs/jsonValue" }
+        },
+        {
+          "type": "object",
+          "additionalProperties": { "$ref": "#/$defs/jsonValue" }
+        }
+      ]
+    }
+  }
+}

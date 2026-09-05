@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Actor Flow frame</title>
+    <script type="module" src="/src/frame.ts"></script>
+    <style>
+      :root { color-scheme: light dark; font-family: system-ui, sans-serif; }
+      body { margin: 0; padding: 16px; background: Canvas; color: CanvasText; }
+      .card { display: grid; gap: 12px; }
+      button { padding: 8px 12px; width: fit-content; }
+      .tag { opacity: .75; font-size: 12px; }
+    </style>
+  </head>
+  <body>
+    <section class="card">
+      <div class="tag" id="frame-status">Loading…</div>
+      <button id="emit">Emit widget event</button>
+    </section>
+  </body>
+</html>

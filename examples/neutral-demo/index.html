@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Actor Flow neutral demo</title>
+    <script type="module" src="/src/main.ts"></script>
+    <style>
+      :root { color-scheme: light dark; font-family: system-ui, sans-serif; }
+      body { margin: 0; padding: 20px; background: Canvas; color: CanvasText; }
+      .shell { display: grid; gap: 12px; }
+      .row { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+      iframe { width: 100%; min-height: 180px; border: 1px solid color-mix(in oklab, CanvasText 15%, transparent); border-radius: 8px; }
+      pre { margin: 0; padding: 12px; background: color-mix(in oklab, Canvas 85%, CanvasText 15%); border-radius: 8px; white-space: pre-wrap; }
+      button { padding: 8px 12px; }
+    </style>
+  </head>
+  <body>
+    <main class="shell">
+      <div class="row">
+        <button id="run-flow">Run flow</button>
+        <strong id="status">Loading…</strong>
+      </div>
+      <iframe id="frame-a" title="Frame A" src="/frame.html?instance=left"></iframe>
+      <iframe id="frame-b" title="Frame B" src="/frame.html?instance=right"></iframe>
+      <pre id="log" aria-live="polite"></pre>
+    </main>
+  </body>
+</html>

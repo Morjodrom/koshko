@@ -1,0 +1,13 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "lib": ["ES2022", "DOM"],
+    "noEmit": true,
+    "types": ["vite/client"],
+    "baseUrl": ".",
+    "paths": {
+      "@actor-flow/emitter": ["../../packages/emitter/src/index"]
+    }
+  },
+  "include": ["src", "vite.config.ts"]
+}
