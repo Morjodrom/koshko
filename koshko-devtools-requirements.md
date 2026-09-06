@@ -118,7 +118,7 @@ The WXT project must contain these logical entrypoints:
 4. **Manifest V3 service worker** routes messages by tab and navigation to the connected panel.
 5. **Options/onboarding page** manages optional host permissions and explains missing frame access.
 
-The reference panel UI should use Vue 3. Vue is an implementation detail of the extension UI and
+The reference panel UI should use React. React is an implementation detail of the extension UI and
 must not be required by inspected applications. Application protocol and view models must remain
 plain TypeScript.
 
@@ -129,7 +129,7 @@ The preferred open-source layout is:
 ```text
 koshko-devtools/
 ├── apps/
-│   └── extension/             # WXT MV3 extension and Vue panel
+│   └── extension/             # WXT MV3 extension and React panel
 ├── packages/
 │   ├── protocol/              # Types, JSON Schema, validator, compatibility rules
 │   ├── emitter/               # Side-effect-free browser emitter

@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@koshko/protocol": "file:../../packages/protocol",
-    "vue": "^3.5.13"
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0"
   }
 }
