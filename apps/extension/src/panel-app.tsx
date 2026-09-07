@@ -31,26 +31,11 @@ import type {
   PanelAccessSnapshot,
 } from './panel-access';
 import { BrandLockup, Icon } from './brand';
-
-export interface PanelMessagePort {
-  onMessage: {
-    addListener(
-      listener: (message: { type: string; kind?: string; captured?: unknown }) => void,
-    ): void;
-    removeListener?(
-      listener: (message: { type: string; kind?: string; captured?: unknown }) => void,
-    ): void;
-  };
-  onDisconnect: {
-    addListener(listener: () => void): void;
-    removeListener?(listener: () => void): void;
-  };
-  postMessage(message: unknown): void | Promise<void>;
-}
+import type { ManagedPanelConnection, PanelConnectionStatus } from './panel-connection';
 
 export interface PanelAppProps {
   repository: KoshkoRepository;
-  port: PanelMessagePort;
+  connection: ManagedPanelConnection;
   tabId: number;
   accessController: PanelAccessController;
   downloadJsonl: (jsonl: string) => void;
@@ -67,13 +52,15 @@ type AccessState =
 
 export function PanelApp({
   repository,
-  port,
+  connection,
   tabId,
   accessController,
   downloadJsonl,
 }: PanelAppProps): ReactElement {
   const [activeTab, setActiveTab] = useState<'timeline' | 'log' | 'state'>('timeline');
-  const [connected, setConnected] = useState(true);
+  const [connectionStatus, setConnectionStatus] = useState<PanelConnectionStatus>(
+    connection.status,
+  );
   const [access, setAccess] = useState<AccessState>({ status: 'checking' });
   const [paused, setPaused] = useState(repository.isPaused);
   const [unreadCount, setUnreadCount] = useState(repository.getUnreadCount());
@@ -216,37 +203,24 @@ export function PanelApp({
       }
       syncFromRepository();
     };
-    const onDisconnect = (): void => setConnected(false);
     const unsubscribe = repository.subscribe(syncFromRepository);
-    port.onMessage.addListener(onMessage);
-    port.onDisconnect.addListener(onDisconnect);
+    const unsubscribeMessages = connection.subscribe(onMessage);
+    const unsubscribeStatus = connection.subscribeStatus(setConnectionStatus);
 
     return () => {
       unsubscribe();
-      port.onMessage.removeListener?.(onMessage);
-      port.onDisconnect.removeListener?.(onDisconnect);
+      unsubscribeMessages();
+      unsubscribeStatus();
     };
-  }, [port, repository]);
+  }, [connection, repository]);
 
-  if (!connected) {
-    return (
-      <main className="shell" data-testid="disconnected-panel">
-        <section className="card disconnected-state">
-          <BrandLockup />
-          <Icon className="state-icon" name="activity" />
-          <h1>Connection lost</h1>
-          <p className="muted">
-            The background connection closed. Reopen DevTools or reload the
-            page.
-          </p>
-        </section>
-      </main>
-    );
-  }
+  const sendCommand = (message: unknown): void => {
+    connection.send(message);
+  };
 
   const togglePaused = (): void => {
     repository.setPaused(!repository.isPaused);
-    void port.postMessage({
+    sendCommand({
       type: PANEL_MESSAGE_SET_PAUSED,
       paused: repository.isPaused,
     });
@@ -279,7 +253,7 @@ export function PanelApp({
   const clear = (): void => {
     setExpandedSignalIds(new Set());
     repository.clear();
-    void port.postMessage({ type: PANEL_MESSAGE_CLEAR });
+    sendCommand({ type: PANEL_MESSAGE_CLEAR });
   };
   const toggleDetails = (signalId: string): void => {
     setExpandedSignalIds((previous) => {
@@ -306,6 +280,11 @@ export function PanelApp({
 
   return (
     <main className="shell">
+      {connectionStatus !== 'connected' ? (
+        <section className="reconnecting-banner" role="status" data-testid="reconnecting-banner">
+          Reconnecting to the background service. Signals may be missed while reconnecting.
+        </section>
+      ) : null}
       <header className="toolbar card">
         <div className="toolbar-copy">
           <BrandLockup compact />

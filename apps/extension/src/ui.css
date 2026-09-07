@@ -82,6 +82,7 @@ h2 { font-size: 1rem; }
 .toolbar, .section-header { justify-content: space-between; }
 .toolbar-copy { min-width: 0; }
 .actions { flex-wrap: wrap; }
+.reconnecting-banner { margin-bottom: 12px; padding: 9px 12px; border: 1px solid color-mix(in srgb, #b66a00 58%, var(--noir-line)); border-radius: 10px; background: color-mix(in srgb, var(--noir-accent-soft) 58%, var(--noir-surface)); color: var(--noir-ink); font-size: .86rem; font-weight: 700; }
 
 button {
   display: inline-flex;
@@ -135,7 +136,6 @@ button.ghost { background: transparent; }
 .empty-with-icon p { color: var(--noir-ink); font-weight: 750; }
 .empty-with-icon span { max-width: 34rem; font-size: .88rem; }
 .state-icon { width: 28px; height: 28px; color: var(--noir-accent); }
-.disconnected-state { display: grid; justify-items: start; gap: 12px; max-width: 480px; margin: 12vh auto; }
 
 .timeline { --timeline-gutter-width: 140px; --timeline-lane-width: 180px; --timeline-line: var(--noir-accent); max-height: calc(100vh - 242px); min-height: 180px; overflow: auto; isolation: isolate; }
 .timeline-headers, .timeline-row { display: grid; grid-template-columns: var(--timeline-gutter-width) minmax(calc(var(--timeline-actor-count) * var(--timeline-lane-width)), 1fr); min-width: calc(var(--timeline-gutter-width) + var(--timeline-actor-count) * var(--timeline-lane-width)); }

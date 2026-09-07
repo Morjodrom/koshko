@@ -8,6 +8,8 @@ export const PANEL_MESSAGE_ACTIVATE_ORIGIN = 'koshko:activate-origin';
 export const PANEL_MESSAGE_RECONCILE_PERMISSIONS = 'koshko:reconcile-permissions';
 export const PANEL_MESSAGE_SET_PAUSED = 'koshko:set-paused';
 export const PANEL_MESSAGE_CLEAR = 'koshko:clear';
+export const PANEL_MESSAGE_READY = 'koshko:ready';
+export const PANEL_MESSAGE_HEARTBEAT = 'koshko:heartbeat';
 
 export interface CaptureSignalTransportMessage {
   type: typeof PANEL_MESSAGE_CAPTURE;
@@ -62,6 +64,17 @@ export interface SetPausedMessage {
 export interface ClearMessage {
   type: typeof PANEL_MESSAGE_CLEAR;
 }
+
+export interface PanelReadyMessage {
+  type: typeof PANEL_MESSAGE_READY;
+}
+
+export interface PanelHeartbeatMessage {
+  type: typeof PANEL_MESSAGE_HEARTBEAT;
+}
+
+export type BackgroundToPanelControlMessage = PanelReadyMessage;
+export type PanelToBackgroundControlMessage = PanelHeartbeatMessage;
 
 export type BackgroundMessage =
   | CaptureTransportMessage

@@ -7,14 +7,14 @@ import {
   PANEL_MESSAGE_ACTIVATE_ORIGIN,
   PANEL_MESSAGE_RECONCILE_PERMISSIONS,
   PANEL_MESSAGE_SYNC_ORIGINS,
-  PANEL_PORT_PREFIX,
   type CaptureTransportMessage,
   type BackgroundMessage,
   type PanelCaptureMessage,
 } from './shared';
 import { handleActionClick, PermissionCoordinator } from './permission-coordinator';
+import { registerPanelPort, type PanelPortsByTab } from './panel-port-router';
 
-const panelPorts = new Map<number, Set<chrome.runtime.Port>>();
+const panelPorts: PanelPortsByTab = new Map();
 const permissionCoordinator = new PermissionCoordinator();
 
 chrome.runtime.onInstalled.addListener(() => {
@@ -38,27 +38,9 @@ chrome.action.onClicked.addListener((tab) => {
 });
 
 chrome.runtime.onConnect.addListener((port) => {
-  if (!port.name.startsWith(PANEL_PORT_PREFIX)) {
-    return;
-  }
-
-  const tabId = Number(port.name.slice(PANEL_PORT_PREFIX.length));
-  if (!Number.isFinite(tabId) || tabId < 0) {
+  if (registerPanelPort(port, panelPorts) === 'invalid') {
     port.disconnect();
-    return;
   }
-
-  const ports = panelPorts.get(tabId) ?? new Set<chrome.runtime.Port>();
-  ports.add(port);
-  panelPorts.set(tabId, ports);
-
-  port.onDisconnect.addListener(() => {
-    const current = panelPorts.get(tabId);
-    current?.delete(port);
-    if (current && current.size === 0) {
-      panelPorts.delete(tabId);
-    }
-  });
 });
 
 chrome.runtime.onMessage.addListener((message: BackgroundMessage, sender, sendResponse) => {

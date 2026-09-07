@@ -1,0 +1,194 @@
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import {
+  PANEL_HEARTBEAT_INTERVAL_MS,
+  PANEL_READY_TIMEOUT_MS,
+  PANEL_RETRY_DELAYS_MS,
+  PanelConnection,
+  type PanelConnectionMessage,
+  type PanelConnectionPort,
+} from './panel-connection';
+import { PANEL_MESSAGE_HEARTBEAT, PANEL_MESSAGE_READY } from './shared';
+
+class FakePort implements PanelConnectionPort {
+  private readonly messageListeners = new Set<(message: unknown) => void>();
+  private readonly disconnectListeners = new Set<() => void>();
+  readonly messages: unknown[] = [];
+  disconnectCalls = 0;
+  throwOnPost = false;
+  postResult: Promise<void> | undefined;
+
+  readonly onMessage = {
+    addListener: (listener: (message: unknown) => void): void => {
+      this.messageListeners.add(listener);
+    },
+    removeListener: (listener: (message: unknown) => void): void => {
+      this.messageListeners.delete(listener);
+    },
+  };
+
+  readonly onDisconnect = {
+    addListener: (listener: () => void): void => {
+      this.disconnectListeners.add(listener);
+    },
+    removeListener: (listener: () => void): void => {
+      this.disconnectListeners.delete(listener);
+    },
+  };
+
+  postMessage(message: unknown): void | Promise<void> {
+    if (this.throwOnPost) throw new Error('port closed');
+    this.messages.push(message);
+    return this.postResult;
+  }
+
+  disconnect(): void {
+    this.disconnectCalls += 1;
+  }
+
+  emit(message: unknown): void {
+    this.messageListeners.forEach((listener) => listener(message));
+  }
+
+  emitDisconnect(): void {
+    this.disconnectListeners.forEach((listener) => listener());
+  }
+
+  get listenerCount(): number {
+    return this.messageListeners.size + this.disconnectListeners.size;
+  }
+}
+
+describe('PanelConnection', () => {
+  afterEach(() => vi.useRealTimers());
+
+  it('waits for ready before forwarding messages and sends a twenty-second heartbeat', () => {
+    vi.useFakeTimers();
+    const port = new FakePort();
+    const connection = new PanelConnection(() => port);
+    const received = vi.fn();
+    connection.subscribe(received);
+
+    expect(connection.status).toBe('connecting');
+    port.emit(null);
+    port.emit({});
+    port.emit({ type: 'koshko:capture' });
+    expect(received).not.toHaveBeenCalled();
+
+    port.emit({ type: PANEL_MESSAGE_READY });
+    port.emit({ type: 'koshko:capture' });
+    expect(received).toHaveBeenCalledOnce();
+    expect(connection.status).toBe('connected');
+    vi.advanceTimersByTime(PANEL_HEARTBEAT_INTERVAL_MS);
+
+    expect(port.messages).toContainEqual({ type: PANEL_MESSAGE_HEARTBEAT });
+  });
+
+  it('retries a missing ready acknowledgement using the capped backoff sequence', () => {
+    vi.useFakeTimers();
+    const ports = Array.from({ length: 7 }, () => new FakePort());
+    const connect = vi.fn(() => ports.shift()!);
+    const connection = new PanelConnection(connect);
+
+    for (const delay of PANEL_RETRY_DELAYS_MS) {
+      vi.advanceTimersByTime(PANEL_READY_TIMEOUT_MS);
+      vi.advanceTimersByTime(delay);
+    }
+    vi.advanceTimersByTime(PANEL_READY_TIMEOUT_MS);
+    vi.advanceTimersByTime(PANEL_RETRY_DELAYS_MS.at(-1)! - 1);
+    expect(connect).toHaveBeenCalledTimes(6);
+    vi.advanceTimersByTime(1);
+    expect(connection.status).toBe('reconnecting');
+    expect(connect).toHaveBeenCalledTimes(7);
+    connection.dispose();
+  });
+
+  it('resets retry backoff after a ready acknowledgement', () => {
+    vi.useFakeTimers();
+    const first = new FakePort();
+    const second = new FakePort();
+    const third = new FakePort();
+    const connect = vi.fn()
+      .mockReturnValueOnce(first)
+      .mockReturnValueOnce(second)
+      .mockReturnValueOnce(third);
+    const connection = new PanelConnection(connect);
+
+    first.emit({ type: PANEL_MESSAGE_READY });
+    first.emitDisconnect();
+    vi.advanceTimersByTime(PANEL_RETRY_DELAYS_MS[0]);
+    second.emit({ type: PANEL_MESSAGE_READY });
+    second.emitDisconnect();
+    vi.advanceTimersByTime(PANEL_RETRY_DELAYS_MS[0] - 1);
+    expect(connect).toHaveBeenCalledTimes(2);
+    vi.advanceTimersByTime(1);
+    expect(connect).toHaveBeenCalledTimes(3);
+    connection.dispose();
+  });
+
+  it('removes stale listeners so reconnecting forwards each message once', () => {
+    vi.useFakeTimers();
+    const first = new FakePort();
+    const second = new FakePort();
+    const connection = new PanelConnection(vi.fn()
+      .mockReturnValueOnce(first)
+      .mockReturnValueOnce(second));
+    const received = vi.fn();
+    connection.subscribe(received);
+    first.emit({ type: PANEL_MESSAGE_READY });
+    first.emitDisconnect();
+    vi.advanceTimersByTime(PANEL_RETRY_DELAYS_MS[0]);
+    first.emit({ type: 'koshko:capture', captured: 'stale' });
+    second.emit({ type: PANEL_MESSAGE_READY });
+    second.emit({ type: 'koshko:capture', captured: 'fresh' });
+
+    expect(first.listenerCount).toBe(0);
+    expect(received).toHaveBeenCalledTimes(1);
+    expect(received).toHaveBeenLastCalledWith({ type: 'koshko:capture', captured: 'fresh' });
+    connection.dispose();
+  });
+
+  it('retries thrown connection and postMessage failures and drops commands while unavailable', () => {
+    vi.useFakeTimers();
+    const port = new FakePort();
+    const connect = vi.fn()
+      .mockImplementationOnce(() => { throw new Error('worker unavailable'); })
+      .mockReturnValueOnce(port);
+    const connection = new PanelConnection(connect);
+
+    expect(connection.send({ type: 'command' })).toBe(false);
+    vi.advanceTimersByTime(PANEL_RETRY_DELAYS_MS[0]);
+    port.emit({ type: PANEL_MESSAGE_READY });
+    port.throwOnPost = true;
+    expect(connection.send({ type: 'command' })).toBe(false);
+    expect(connection.status).toBe('reconnecting');
+    connection.dispose();
+  });
+
+  it('retries after an asynchronously rejected postMessage', async () => {
+    const port = new FakePort();
+    const connection = new PanelConnection(() => port);
+    port.emit({ type: PANEL_MESSAGE_READY });
+    port.postResult = Promise.reject(new Error('worker stopped'));
+
+    expect(connection.send({ type: 'command' })).toBe(true);
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(connection.status).toBe('reconnecting');
+    expect(port.listenerCount).toBe(0);
+    connection.dispose();
+  });
+
+  it('disposes timers and listeners without opening another connection', () => {
+    vi.useFakeTimers();
+    const port = new FakePort();
+    const connect = vi.fn(() => port);
+    const connection = new PanelConnection(connect);
+    connection.dispose();
+    vi.advanceTimersByTime(PANEL_READY_TIMEOUT_MS + PANEL_RETRY_DELAYS_MS.at(-1)!);
+
+    expect(connect).toHaveBeenCalledOnce();
+    expect(port.listenerCount).toBe(0);
+    expect(port.disconnectCalls).toBe(1);
+  });
+});

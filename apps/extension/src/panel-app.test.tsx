@@ -9,7 +9,8 @@ import {
 } from '@testing-library/react';
 import type { CapturedSignalV1, CapturedStateMutationV1 } from '@koshko/protocol';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { PanelApp, type PanelMessagePort } from './panel-app';
+import { PanelApp } from './panel-app';
+import type { ManagedPanelConnection, PanelConnectionStatus } from './panel-connection';
 import type { PanelAccessController, PanelAccessSnapshot } from './panel-access';
 import type { PanelAccessChange } from './panel-access';
 import { formatTime, KoshkoRepository } from './repository';
@@ -19,38 +20,30 @@ import {
   PANEL_MESSAGE_SET_PAUSED,
 } from './shared';
 
-class FakePanelPort implements PanelMessagePort {
+class FakePanelConnection implements ManagedPanelConnection {
   private readonly messageListeners = new Set<
     (message: { type: string; kind?: string; captured?: unknown }) => void
   >();
-  private readonly disconnectListeners = new Set<() => void>();
+  private readonly statusListeners = new Set<(status: PanelConnectionStatus) => void>();
 
   readonly messages: unknown[] = [];
+  status: PanelConnectionStatus = 'connected';
 
-  readonly onMessage = {
-    addListener: (
-      listener: (message: { type: string; kind?: string; captured?: unknown }) => void,
-    ): void => {
-      this.messageListeners.add(listener);
-    },
-    removeListener: (
-      listener: (message: { type: string; kind?: string; captured?: unknown }) => void,
-    ): void => {
-      this.messageListeners.delete(listener);
-    },
-  };
+  subscribe(listener: (message: { type: string; kind?: string; captured?: unknown }) => void): () => void {
+    this.messageListeners.add(listener);
+    return () => this.messageListeners.delete(listener);
+  }
 
-  readonly onDisconnect = {
-    addListener: (listener: () => void): void => {
-      this.disconnectListeners.add(listener);
-    },
-    removeListener: (listener: () => void): void => {
-      this.disconnectListeners.delete(listener);
-    },
-  };
-
-  postMessage(message: unknown): void {
+  send(message: unknown): boolean {
+    if (this.status !== 'connected') return false;
     this.messages.push(message);
+    return true;
+  }
+
+  subscribeStatus(listener: (status: PanelConnectionStatus) => void): () => void {
+    this.statusListeners.add(listener);
+    listener(this.status);
+    return () => this.statusListeners.delete(listener);
   }
 
   emitCapture(captured: CapturedSignalV1): void {
@@ -66,13 +59,17 @@ class FakePanelPort implements PanelMessagePort {
   }
 
   disconnect(): void {
-    for (const listener of this.disconnectListeners) {
-      listener();
-    }
+    this.status = 'reconnecting';
+    this.statusListeners.forEach((listener) => listener(this.status));
+  }
+
+  ready(): void {
+    this.status = 'connected';
+    this.statusListeners.forEach((listener) => listener(this.status));
   }
 
   get listenerCount(): number {
-    return this.messageListeners.size + this.disconnectListeners.size;
+    return this.messageListeners.size + this.statusListeners.size;
   }
 }
 
@@ -142,18 +139,18 @@ function createAccessController(
 }
 
 function mountPanel(accessController = createAccessController()): {
-  port: FakePanelPort;
+  port: FakePanelConnection;
   repository: KoshkoRepository;
   downloadJsonl: ReturnType<typeof vi.fn>;
   unmount: () => void;
 } {
-  const port = new FakePanelPort();
+  const port = new FakePanelConnection();
   const repository = new KoshkoRepository();
   const downloadJsonl = vi.fn();
   const { unmount } = render(
     <PanelApp
       repository={repository}
-      port={port}
+      connection={port}
       tabId={17}
       accessController={accessController}
       downloadJsonl={downloadJsonl}
@@ -294,7 +291,7 @@ describe('PanelApp', () => {
     expect(accessController.grant).not.toHaveBeenCalled();
   });
 
-  it('shows empty and disconnected states', () => {
+  it('keeps panel data visible while reconnecting', () => {
     const { port } = mountPanel();
 
     expect(screen.getByTestId('empty-state').textContent).toContain(
@@ -303,11 +300,19 @@ describe('PanelApp', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Global State' }));
     expect(screen.getByTestId('global-state').textContent).toBe('{}');
 
-    act(() => port.disconnect());
+    act(() => {
+      port.emitCapture(captured());
+      port.disconnect();
+    });
 
-    expect(screen.getByTestId('disconnected-panel').textContent).toContain(
-      'background connection closed',
+    expect(screen.getByTestId('reconnecting-banner').textContent).toContain(
+      'Signals may be missed',
     );
+    fireEvent.click(screen.getByRole('button', { name: 'Timeline' }));
+    expect(screen.getByTestId('timeline').textContent).toContain('host.ready');
+
+    act(() => port.ready());
+    expect(screen.queryByTestId('reconnecting-banner')).toBeNull();
   });
 
   it('renders actor instances, directed messages, and internal messages in the timeline', () => {

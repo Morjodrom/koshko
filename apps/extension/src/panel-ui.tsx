@@ -1,8 +1,9 @@
 import { createRoot } from 'react-dom/client';
-import { PanelApp, type PanelMessagePort } from './panel-app';
+import { PanelApp } from './panel-app';
 import { PANEL_PORT_PREFIX } from './shared';
 import { KoshkoRepository } from './repository';
 import { createPanelAccessController } from './panel-access';
+import { PanelConnection, type PanelConnectionPort } from './panel-connection';
 import './ui.css';
 
 const mountTarget = document.querySelector<HTMLDivElement>('#app');
@@ -15,14 +16,14 @@ if (!Number.isFinite(tabId) || tabId < 0) {
 }
 
 const repository = new KoshkoRepository();
-const port = chrome.runtime.connect({
+const port = new PanelConnection(() => chrome.runtime.connect({
   name: `${PANEL_PORT_PREFIX}${tabId}`,
-}) as PanelMessagePort;
+}) as PanelConnectionPort);
 
 createRoot(mountTarget).render(
   <PanelApp
     repository={repository}
-    port={port}
+    connection={port}
     tabId={tabId}
     accessController={createPanelAccessController(tabId)}
     downloadJsonl={(jsonl) => {
@@ -36,3 +37,5 @@ createRoot(mountTarget).render(
     }}
   />,
 );
+
+window.addEventListener('unload', () => port.dispose(), { once: true });
