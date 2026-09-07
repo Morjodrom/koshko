@@ -8,6 +8,7 @@ import {
   within,
 } from '@testing-library/react';
 import type { CapturedSignalV1, CapturedStateMutationV1 } from '@koshko/protocol';
+import type { PanelCaptureMessage } from './shared';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { PanelApp } from './panel-app';
 import type { ManagedPanelConnection, PanelConnectionStatus } from './panel-connection';
@@ -16,28 +17,19 @@ import type { PanelAccessChange } from './panel-access';
 import { formatDateTime, formatTime, KoshkoRepository } from './repository';
 import {
   PANEL_MESSAGE_CAPTURE,
-  PANEL_MESSAGE_CLEAR,
-  PANEL_MESSAGE_SET_PAUSED,
 } from './shared';
 
 class FakePanelConnection implements ManagedPanelConnection {
   private readonly messageListeners = new Set<
-    (message: { type: string; kind?: string; captured?: unknown }) => void
+    (message: PanelCaptureMessage) => void
   >();
   private readonly statusListeners = new Set<(status: PanelConnectionStatus) => void>();
 
-  readonly messages: unknown[] = [];
   status: PanelConnectionStatus = 'connected';
 
-  subscribe(listener: (message: { type: string; kind?: string; captured?: unknown }) => void): () => void {
+  subscribe(listener: (message: PanelCaptureMessage) => void): () => void {
     this.messageListeners.add(listener);
     return () => this.messageListeners.delete(listener);
-  }
-
-  send(message: unknown): boolean {
-    if (this.status !== 'connected') return false;
-    this.messages.push(message);
-    return true;
   }
 
   subscribeStatus(listener: (status: PanelConnectionStatus) => void): () => void {
@@ -532,10 +524,6 @@ describe('PanelApp', () => {
     expect(
       document.querySelectorAll('[data-signal-name="host.buffered"]'),
     ).toHaveLength(0);
-    expect(port.messages).toContainEqual({
-      type: PANEL_MESSAGE_SET_PAUSED,
-      paused: true,
-    });
 
     fireEvent.click(screen.getByTestId('pause-button'));
     expect(
@@ -551,9 +539,8 @@ describe('PanelApp', () => {
     );
 
     fireEvent.click(screen.getByTestId('clear-button'));
-    expect(repository.getCount()).toBe(0);
+    expect(repository.getSignals().length).toBe(0);
     expect(screen.getByTestId('empty-state')).toBeTruthy();
-    expect(port.messages).toContainEqual({ type: PANEL_MESSAGE_CLEAR });
   });
 
   it('renders global state mutations without adding them to timeline or export', () => {
@@ -581,7 +568,7 @@ describe('PanelApp', () => {
 
     fireEvent.click(screen.getByTestId('export-button'));
     expect(downloadJsonl).toHaveBeenCalledWith(expect.not.stringContaining('checkout'));
-    expect(repository.getState()).toEqual({ checkout: { total: 100, currency: 'RUB' } });
+    expect(repository.getDisplayState()).toEqual({ checkout: { total: 100, currency: 'RUB' } });
   });
 
   it('inspects state history with pinned snapshots and live updates', () => {
@@ -874,7 +861,7 @@ describe('PanelApp', () => {
         ),
       ),
     );
-    expect(repository.getState()).toEqual({ ready: false });
+    expect(repository.getDisplayState()).toEqual({ ready: false });
     expect(stateTree.textContent).toContain('ready:false');
   });
 

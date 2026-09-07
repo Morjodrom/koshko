@@ -77,21 +77,6 @@ export class PermissionCoordinator {
     });
   }
 
-  replace(origins: string[]): Promise<string[]> {
-    return this.enqueue(async () => {
-      const normalized = await setStoredOrigins(normalizeOriginList(origins));
-      await syncRegisteredContentScripts(normalized);
-      return normalized;
-    });
-  }
-
-  restore(): Promise<void> {
-    return this.enqueue(async () => {
-      const origins = await getStoredOrigins();
-      await syncRegisteredContentScripts(origins);
-    });
-  }
-
   private enqueue<T>(task: () => Promise<T>): Promise<T> {
     const result = this.queue.then(task, task);
     this.queue = result.then(

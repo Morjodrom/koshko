@@ -1,4 +1,6 @@
+import type { PanelCaptureMessage } from './shared';
 import {
+  PANEL_MESSAGE_CAPTURE,
   PANEL_MESSAGE_HEARTBEAT,
   PANEL_MESSAGE_READY,
 } from './shared';
@@ -9,12 +11,6 @@ export const PANEL_RETRY_DELAYS_MS = [250, 500, 1_000, 2_000, 5_000] as const;
 
 export type PanelConnectionStatus = 'connecting' | 'connected' | 'reconnecting';
 
-export interface PanelConnectionMessage {
-  type: string;
-  kind?: string;
-  captured?: unknown;
-}
-
 export interface PanelConnectionPort {
   onMessage: {
     addListener(listener: (message: unknown) => void): void;
@@ -24,18 +20,17 @@ export interface PanelConnectionPort {
     addListener(listener: () => void): void;
     removeListener?(listener: () => void): void;
   };
-  postMessage(message: unknown): void | Promise<void>;
+  postMessage(message: unknown): void;
   disconnect?(): void;
 }
 
-type MessageListener = (message: PanelConnectionMessage) => void;
+type MessageListener = (message: PanelCaptureMessage) => void;
 type StatusListener = (status: PanelConnectionStatus) => void;
 
 export interface ManagedPanelConnection {
   readonly status: PanelConnectionStatus;
   subscribe(listener: MessageListener): () => void;
   subscribeStatus(listener: StatusListener): () => void;
-  send(message: unknown): boolean;
 }
 
 /** Keeps a panel attached across MV3 service-worker restarts. */
@@ -70,24 +65,6 @@ export class PanelConnection implements ManagedPanelConnection {
     return () => this.statusListeners.delete(listener);
   }
 
-  send(message: unknown): boolean {
-    const port = this.currentPort;
-    if (this.disposed || this.status !== 'connected' || !port) {
-      return false;
-    }
-
-    try {
-      const result = port.postMessage(message);
-      if (result && typeof (result as Promise<void>).then === 'function') {
-        void (result as Promise<void>).catch(() => this.fail(port));
-      }
-      return true;
-    } catch {
-      this.fail(port);
-      return false;
-    }
-  }
-
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
@@ -119,12 +96,12 @@ export class PanelConnection implements ManagedPanelConnection {
     this.currentPort = port;
     const onMessage = (message: unknown): void => {
       if (this.currentPort !== port || this.disposed) return;
-      if (!isPanelConnectionMessage(message)) return;
-      if (message.type === PANEL_MESSAGE_READY) {
+      if (message == null || typeof message !== 'object') return;
+      if ((message as { type?: unknown }).type === PANEL_MESSAGE_READY) {
         this.ready();
         return;
       }
-      if (this.status !== 'connected') return;
+      if (this.status !== 'connected' || !isPanelCaptureMessage(message)) return;
       this.messageListeners.forEach((listener) => listener(message));
     };
     const onDisconnect = (): void => this.fail(port);
@@ -140,7 +117,11 @@ export class PanelConnection implements ManagedPanelConnection {
     this.retryIndex = 0;
     this.setStatus('connected');
     this.heartbeatTimer = setInterval(() => {
-      this.send({ type: PANEL_MESSAGE_HEARTBEAT });
+      try {
+        this.currentPort?.postMessage({ type: PANEL_MESSAGE_HEARTBEAT });
+      } catch {
+        if (this.currentPort) this.fail(this.currentPort);
+      }
     }, PANEL_HEARTBEAT_INTERVAL_MS);
   }
 
@@ -200,10 +181,13 @@ export class PanelConnection implements ManagedPanelConnection {
   }
 }
 
-function isPanelConnectionMessage(message: unknown): message is PanelConnectionMessage {
-  return Boolean(
-    message
-    && typeof message === 'object'
-    && typeof (message as { type?: unknown }).type === 'string',
-  );
+function isPanelCaptureMessage(message: unknown): message is PanelCaptureMessage {
+  if (!message || typeof message !== 'object') return false;
+  const value = message as { type?: unknown; kind?: unknown; captured?: unknown };
+  if (value.type !== PANEL_MESSAGE_CAPTURE || (value.kind !== 'signal' && value.kind !== 'state-mutation')) return false;
+  if (!value.captured || typeof value.captured !== 'object') return false;
+  const captured = value.captured as { signal?: unknown; mutation?: unknown };
+  return value.kind === 'signal'
+    ? Boolean(captured.signal && typeof captured.signal === 'object')
+    : Boolean(captured.mutation && typeof captured.mutation === 'object');
 }

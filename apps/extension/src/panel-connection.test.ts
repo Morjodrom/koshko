@@ -4,7 +4,6 @@ import {
   PANEL_READY_TIMEOUT_MS,
   PANEL_RETRY_DELAYS_MS,
   PanelConnection,
-  type PanelConnectionMessage,
   type PanelConnectionPort,
 } from './panel-connection';
 import { PANEL_MESSAGE_HEARTBEAT, PANEL_MESSAGE_READY } from './shared';
@@ -15,7 +14,6 @@ class FakePort implements PanelConnectionPort {
   readonly messages: unknown[] = [];
   disconnectCalls = 0;
   throwOnPost = false;
-  postResult: Promise<void> | undefined;
 
   readonly onMessage = {
     addListener: (listener: (message: unknown) => void): void => {
@@ -35,10 +33,9 @@ class FakePort implements PanelConnectionPort {
     },
   };
 
-  postMessage(message: unknown): void | Promise<void> {
+  postMessage(message: unknown): void {
     if (this.throwOnPost) throw new Error('port closed');
     this.messages.push(message);
-    return this.postResult;
   }
 
   disconnect(): void {
@@ -71,11 +68,11 @@ describe('PanelConnection', () => {
     expect(connection.status).toBe('connecting');
     port.emit(null);
     port.emit({});
-    port.emit({ type: 'koshko:capture' });
+    port.emit({ type: 'koshko:capture', kind: 'signal', captured: { signal: {} } });
     expect(received).not.toHaveBeenCalled();
 
     port.emit({ type: PANEL_MESSAGE_READY });
-    port.emit({ type: 'koshko:capture' });
+    port.emit({ type: 'koshko:capture', kind: 'signal', captured: { signal: {} } });
     expect(received).toHaveBeenCalledOnce();
     expect(connection.status).toBe('connected');
     vi.advanceTimersByTime(PANEL_HEARTBEAT_INTERVAL_MS);
@@ -137,42 +134,24 @@ describe('PanelConnection', () => {
     first.emit({ type: PANEL_MESSAGE_READY });
     first.emitDisconnect();
     vi.advanceTimersByTime(PANEL_RETRY_DELAYS_MS[0]);
-    first.emit({ type: 'koshko:capture', captured: 'stale' });
+    first.emit({ type: 'koshko:capture', kind: 'signal', captured: { signal: {}, stale: true } });
     second.emit({ type: PANEL_MESSAGE_READY });
-    second.emit({ type: 'koshko:capture', captured: 'fresh' });
+    second.emit({ type: 'koshko:capture', kind: 'signal', captured: { signal: {}, fresh: true } });
 
     expect(first.listenerCount).toBe(0);
     expect(received).toHaveBeenCalledTimes(1);
-    expect(received).toHaveBeenLastCalledWith({ type: 'koshko:capture', captured: 'fresh' });
+    expect(received).toHaveBeenLastCalledWith({ type: 'koshko:capture', kind: 'signal', captured: { signal: {}, fresh: true } });
     connection.dispose();
   });
 
-  it('retries thrown connection and postMessage failures and drops commands while unavailable', () => {
+  it('reconnects when a synchronous heartbeat post fails', () => {
     vi.useFakeTimers();
     const port = new FakePort();
-    const connect = vi.fn()
-      .mockImplementationOnce(() => { throw new Error('worker unavailable'); })
-      .mockReturnValueOnce(port);
-    const connection = new PanelConnection(connect);
+    const connection = new PanelConnection(() => port);
 
-    expect(connection.send({ type: 'command' })).toBe(false);
-    vi.advanceTimersByTime(PANEL_RETRY_DELAYS_MS[0]);
     port.emit({ type: PANEL_MESSAGE_READY });
     port.throwOnPost = true;
-    expect(connection.send({ type: 'command' })).toBe(false);
-    expect(connection.status).toBe('reconnecting');
-    connection.dispose();
-  });
-
-  it('retries after an asynchronously rejected postMessage', async () => {
-    const port = new FakePort();
-    const connection = new PanelConnection(() => port);
-    port.emit({ type: PANEL_MESSAGE_READY });
-    port.postResult = Promise.reject(new Error('worker stopped'));
-
-    expect(connection.send({ type: 'command' })).toBe(true);
-    await Promise.resolve();
-    await Promise.resolve();
+    vi.advanceTimersByTime(PANEL_HEARTBEAT_INTERVAL_MS);
 
     expect(connection.status).toBe('reconnecting');
     expect(port.listenerCount).toBe(0);

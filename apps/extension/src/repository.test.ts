@@ -1,7 +1,45 @@
 import { describe, expect, it } from 'vitest';
-import { KoshkoRepository, actorKey, formatTimestamp } from './repository';
+import { KoshkoRepository, actorKey, formatDateTime, getActorColumns } from './repository';
 
 describe('koshko dev tools repository', () => {
+  it('notifies subscribers exactly once for active, paused, and navigation records', () => {
+    const repo = new KoshkoRepository();
+    let notifications = 0;
+    repo.subscribe(() => {
+      notifications += 1;
+    });
+    const signal = (id: string, navigationId: string) => ({
+      signal: {
+        protocol: 'koshko' as const,
+        version: 1 as const,
+        id,
+        producerId: 'producer',
+        producerSequence: notifications + 1,
+        occurredAt: notifications + 1,
+        source: { id: 'host' },
+        name: id,
+      },
+      observedAt: notifications + 1,
+      tabId: 1,
+      frameId: 0,
+      navigationId,
+      frameUrl: 'https://example.com',
+      frameOrigin: 'https://example.com',
+    });
+
+    repo.record(signal('active', 'nav-a'));
+    expect(notifications).toBe(1);
+
+    repo.setPaused(true);
+    const beforePausedRecord = notifications;
+    repo.record(signal('paused', 'nav-a'));
+    expect(notifications).toBe(beforePausedRecord + 1);
+
+    const beforeNavigation = notifications;
+    repo.record(signal('navigation', 'nav-b'));
+    expect(notifications).toBe(beforeNavigation + 1);
+  });
+
   it('keeps signals chronological and clears on a new top-frame document identity', () => {
     const repo = new KoshkoRepository();
 
@@ -63,7 +101,7 @@ describe('koshko dev tools repository', () => {
     });
 
     expect(repo.getSignals().map((signal) => signal.signal.id)).toEqual(['top-2']);
-    expect(repo.getActorColumns().map((actor) => actor.key)).toEqual([actorKey({ id: 'host', label: 'Host' })]);
+    expect(getActorColumns(repo.getDisplaySignals()).map((actor) => actor.key)).toEqual([actorKey({ id: 'host', label: 'Host' })]);
   });
 
   it('freezes the display while paused, clears, and exports JSONL metadata', () => {
@@ -122,11 +160,46 @@ describe('koshko dev tools repository', () => {
     expect(lines[0]).toContain('"protocol":"koshko"');
     expect(lines[1]).toContain('"id":"kept-1"');
     repo.clear();
-    expect(repo.getCount()).toBe(0);
+    expect(repo.getSignals().length).toBe(0);
+  });
+
+  it('discovers actors from displayed signals only while paused', () => {
+    const repo = new KoshkoRepository();
+    const makeSignal = (id: string, source: string) => ({
+      signal: {
+        protocol: 'koshko' as const,
+        version: 1 as const,
+        id,
+        producerId: 'producer',
+        producerSequence: 1,
+        occurredAt: 1,
+        source: { id: source },
+        name: id,
+      },
+      observedAt: 1,
+      tabId: 1,
+      frameId: 0,
+      navigationId: 'nav',
+      frameUrl: 'https://example.com',
+      frameOrigin: 'https://example.com',
+    });
+
+    repo.record(makeSignal('host-event', 'host'));
+    repo.setPaused(true);
+    repo.record(makeSignal('widget-event', 'widget'));
+
+    expect(getActorColumns(repo.getDisplaySignals()).map((actor) => actor.key)).toEqual([
+      actorKey({ id: 'host' }),
+    ]);
+    repo.setPaused(false);
+    expect(getActorColumns(repo.getDisplaySignals()).map((actor) => actor.key)).toEqual([
+      actorKey({ id: 'host' }),
+      actorKey({ id: 'widget' }),
+    ]);
   });
 
   it('formats timestamps with milliseconds', () => {
-    expect(formatTimestamp(Date.parse('2026-09-05T12:34:56.789Z'))).toBe('2026-09-05T12:34:56.789Z');
+    expect(formatDateTime(Date.parse('2026-09-05T12:34:56.789Z'))).toBe('2026-09-05T12:34:56.789Z');
   });
 
   it('reconstructs global state, resets it for top-frame navigation and clear, and freezes it while paused', () => {
@@ -150,13 +223,11 @@ describe('koshko dev tools repository', () => {
     });
 
     repo.record(stateMutation('state-1', 'nav-a', [{ op: 'add', path: '/cart', value: { count: 1 } }]));
-    expect(repo.getState()).toEqual({ cart: { count: 1 } });
     expect(repo.getDisplayState()).toEqual({ cart: { count: 1 } });
-    expect(repo.getCount()).toBe(0);
+    expect(repo.getSignals().length).toBe(0);
 
     repo.setPaused(true);
     repo.record(stateMutation('state-2', 'nav-a', [{ op: 'replace', path: '/cart/count', value: 2 }]));
-    expect(repo.getState()).toEqual({ cart: { count: 2 } });
     expect(repo.getDisplayState()).toEqual({ cart: { count: 1 } });
     expect(repo.getUnreadCount()).toBe(1);
 
@@ -164,11 +235,9 @@ describe('koshko dev tools repository', () => {
     expect(repo.getDisplayState()).toEqual({ cart: { count: 2 } });
 
     repo.record(stateMutation('state-3', 'nav-b', [{ op: 'add', path: '/fresh', value: true }]));
-    expect(repo.getState()).toEqual({ fresh: true });
     expect(repo.getDisplayState()).toEqual({ fresh: true });
 
     repo.clear();
-    expect(repo.getState()).toEqual({});
     expect(repo.getDisplayState()).toEqual({});
   });
 
@@ -200,7 +269,7 @@ describe('koshko dev tools repository', () => {
       },
     });
 
-    expect(repo.getState()).toEqual({ value: 1 });
+    expect(repo.getDisplayState()).toEqual({ value: 1 });
   });
 
   it('retains a deterministic combined log snapshot, including invalid mutations, across pause and navigation', () => {
@@ -240,7 +309,7 @@ describe('koshko dev tools repository', () => {
 
     expect(repo.getDisplayLog().map((entry) => ('signal' in entry ? entry.signal.id : entry.mutation.id))).toEqual(['signal-1', 'state-1']);
     expect(repo.getLog().map((entry) => ('signal' in entry ? entry.signal.id : entry.mutation.id))).toEqual(['signal-1', 'state-1', 'state-invalid']);
-    expect(repo.getState()).toEqual({ value: 1 });
+    expect(repo.getDisplayState()).toEqual({ value: 1 });
 
     repo.setPaused(false);
     expect(repo.getDisplayLog().map((entry) => ('signal' in entry ? entry.signal.id : entry.mutation.id))).toEqual(['signal-1', 'state-1', 'state-invalid']);
@@ -344,7 +413,6 @@ describe('koshko dev tools repository', () => {
 
     expect(repo.getDisplayStateHistory().map((snapshot) => snapshot.index)).toEqual([0, 1, 2]);
     expect(repo.getDisplayState()).toEqual({ value: 1 });
-    expect(repo.getState()).toEqual({ value: 2 });
     expect(repo.selectStateSnapshot(null)).toBe(true);
     expect(repo.getSelectedStateSnapshotIndex()).toBeNull();
     expect(repo.getDisplayState()).toEqual({ value: 2 });
@@ -366,7 +434,6 @@ describe('koshko dev tools repository', () => {
     recordMutation('second', 'nav-a', [{ op: 'replace', path: '/value', value: 2 }]);
 
     expect(repo.getDisplayStateHistory().map((snapshot) => snapshot.index)).toEqual([0, 1]);
-    expect(repo.getStateHistory().map((snapshot) => snapshot.index)).toEqual([0, 1, 2]);
 
     repo.setPaused(false);
     expect(repo.getDisplayStateHistory().map((snapshot) => snapshot.index)).toEqual([0, 1, 2]);

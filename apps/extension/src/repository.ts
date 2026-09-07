@@ -22,8 +22,6 @@ export interface KoshkoStateSnapshot {
   state: JsonObject;
 }
 
-export type KoshkoStateHistorySnapshot = KoshkoStateSnapshot;
-
 export class KoshkoRepository {
   private readonly capturedSignals: CapturedSignalV1[] = [];
 
@@ -33,8 +31,6 @@ export class KoshkoRepository {
 
   private readonly listeners = new Set<() => void>();
 
-  private displayVersion = 0;
-
   private displaySignals: CapturedSignalV1[] = [];
 
   private displayLog: KoshkoLogEntry[] = [];
@@ -43,7 +39,7 @@ export class KoshkoRepository {
 
   private state: JsonObject = this.stateHistory[0].state;
 
-  private displayState: JsonObject = {};
+  private displayState: JsonObject = this.state;
 
   private displayStateHistory: KoshkoStateSnapshot[] = this.stateHistory;
 
@@ -65,20 +61,8 @@ export class KoshkoRepository {
     return [...this.displayLog];
   }
 
-  getState(): JsonObject {
-    return this.state;
-  }
-
-  getCurrentState(): JsonObject {
-    return this.state;
-  }
-
   getDisplayState(): JsonObject {
     return this.displayState;
-  }
-
-  getStateHistory(): KoshkoStateSnapshot[] {
-    return [...this.stateHistory];
   }
 
   getDisplayStateHistory(): KoshkoStateSnapshot[] {
@@ -100,17 +84,12 @@ export class KoshkoRepository {
 
     this.selectedStateSnapshotIndex = index;
     this.displayState = this.getSelectedDisplayState();
-    this.bumpDisplayVersion();
     this.notify();
     return true;
   }
 
   getUnreadCount(): number {
     return this.unreadCount;
-  }
-
-  getDisplayVersion(): number {
-    return this.displayVersion;
   }
 
   subscribe(listener: () => void): () => void {
@@ -130,27 +109,15 @@ export class KoshkoRepository {
   }
 
   clear(): void {
-    this.capturedSignals.length = 0;
-    this.capturedLog.length = 0;
-    this.displaySignals = [];
-    this.displayLog = [];
-    const initialStateSnapshot = createInitialStateSnapshot();
-    this.state = initialStateSnapshot.state;
-    this.displayState = initialStateSnapshot.state;
-    this.stateHistory = [initialStateSnapshot];
-    this.displayStateHistory = this.stateHistory;
-    this.selectedStateSnapshotIndex = null;
-    this.unreadCount = 0;
-    this.topFrameIdentity = undefined;
-    this.bumpDisplayVersion();
+    this.reset();
     this.notify();
   }
 
-  record(captured: CapturedSignalV1 | CapturedStateMutationV1): boolean {
+  record(captured: CapturedSignalV1 | CapturedStateMutationV1): void {
     const identity = this.getDocumentIdentity(captured);
     if (captured.frameId === 0 && identity !== undefined) {
       if (this.topFrameIdentity !== undefined && this.topFrameIdentity !== identity) {
-        this.clear();
+        this.reset();
       }
       this.topFrameIdentity = identity;
     }
@@ -175,11 +142,25 @@ export class KoshkoRepository {
     }
     if (this.paused) {
       this.unreadCount += 1;
-      return true;
+    } else {
+      this.syncDisplaySnapshot();
     }
-    this.syncDisplaySnapshot();
     this.notify();
-    return true;
+  }
+
+  private reset(): void {
+    this.capturedSignals.length = 0;
+    this.capturedLog.length = 0;
+    this.displaySignals = [];
+    this.displayLog = [];
+    const initialStateSnapshot = createInitialStateSnapshot();
+    this.state = initialStateSnapshot.state;
+    this.displayState = initialStateSnapshot.state;
+    this.stateHistory = [initialStateSnapshot];
+    this.displayStateHistory = this.stateHistory;
+    this.selectedStateSnapshotIndex = null;
+    this.unreadCount = 0;
+    this.topFrameIdentity = undefined;
   }
 
   getSignals(): CapturedSignalV1[] {
@@ -188,28 +169,6 @@ export class KoshkoRepository {
 
   getLog(): KoshkoLogEntry[] {
     return [...this.capturedLog].sort(compareCapturedLogEntries);
-  }
-
-  getCount(): number {
-    return this.capturedSignals.length;
-  }
-
-  getActorColumns(): KoshkoTimelineActor[] {
-    const columns: KoshkoTimelineActor[] = [];
-    const seen = new Set<string>();
-
-    for (const signal of this.getSignals()) {
-      for (const reference of [signal.signal.source, signal.signal.target].filter(Boolean) as ActorReference[]) {
-        const key = actorKey(reference);
-        if (seen.has(key)) {
-          continue;
-        }
-        seen.add(key);
-        columns.push({ key, reference });
-      }
-    }
-
-    return columns;
   }
 
   exportJsonl(): string {
@@ -238,7 +197,6 @@ export class KoshkoRepository {
     this.displayLog = this.getLog();
     this.displayStateHistory = this.stateHistory;
     this.displayState = this.getSelectedDisplayState();
-    this.bumpDisplayVersion();
   }
 
   private getSelectedDisplayState(): JsonObject {
@@ -248,10 +206,6 @@ export class KoshkoRepository {
 
     return this.displayStateHistory.find((snapshot) => snapshot.index === this.selectedStateSnapshotIndex)?.state
       ?? this.state;
-  }
-
-  private bumpDisplayVersion(): void {
-    this.displayVersion += 1;
   }
 
   private notify(): void {
@@ -355,10 +309,26 @@ function getLogEntryMetadata(entry: KoshkoLogEntry): {
   return isCapturedSignal(entry) ? entry.signal : entry.mutation;
 }
 
-function isCapturedSignal(
+export function isCapturedSignal(
   captured: CapturedSignalV1 | CapturedStateMutationV1,
 ): captured is CapturedSignalV1 {
   return 'signal' in captured;
+}
+
+export function getActorColumns(entries: readonly KoshkoLogEntry[]): KoshkoTimelineActor[] {
+  const columns: KoshkoTimelineActor[] = [];
+  const seen = new Set<string>();
+  for (const entry of entries) {
+    if (!isCapturedSignal(entry)) continue;
+    for (const reference of [entry.signal.source, entry.signal.target]) {
+      if (!reference) continue;
+      const key = actorKey(reference);
+      if (seen.has(key)) continue;
+      seen.add(key);
+      columns.push({ key, reference });
+    }
+  }
+  return columns;
 }
 
 export function actorKey(reference: ActorReference): string {
@@ -377,10 +347,6 @@ export function formatTime(occurredAt: number): string {
 }
 
 export function formatDateTime(occurredAt: number): string {
-  return formatTimestamp(occurredAt);
-}
-
-export function formatTimestamp(occurredAt: number): string {
   const date = new Date(occurredAt);
   return `${date.toISOString().slice(0, 19)}.${String(date.getMilliseconds()).padStart(3, '0')}Z`;
 }

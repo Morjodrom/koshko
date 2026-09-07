@@ -2,6 +2,7 @@ import {
   PANEL_MESSAGE_HEARTBEAT,
   PANEL_MESSAGE_READY,
   PANEL_PORT_PREFIX,
+  parseTabId,
   type BackgroundToPanelControlMessage,
   type PanelToBackgroundControlMessage,
 } from './shared';
@@ -30,8 +31,8 @@ export function registerPanelPort(
     return 'ignored';
   }
 
-  const tabId = Number(port.name.slice(PANEL_PORT_PREFIX.length));
-  if (!Number.isFinite(tabId) || tabId < 0) {
+  const tabId = parseTabId(port.name.slice(PANEL_PORT_PREFIX.length));
+  if (tabId == null) {
     return 'invalid';
   }
 

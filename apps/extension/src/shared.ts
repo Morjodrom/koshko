@@ -3,11 +3,8 @@ export const CONTENT_SCRIPT_ID_PREFIX = 'koshko-capture';
 export const CONTENT_SCRIPT_JS_PATH = 'content-scripts/capture.js';
 export const PANEL_PORT_PREFIX = 'koshko-panel:';
 export const PANEL_MESSAGE_CAPTURE = 'koshko:capture';
-export const PANEL_MESSAGE_SYNC_ORIGINS = 'koshko:sync-origins';
 export const PANEL_MESSAGE_ACTIVATE_ORIGIN = 'koshko:activate-origin';
 export const PANEL_MESSAGE_RECONCILE_PERMISSIONS = 'koshko:reconcile-permissions';
-export const PANEL_MESSAGE_SET_PAUSED = 'koshko:set-paused';
-export const PANEL_MESSAGE_CLEAR = 'koshko:clear';
 export const PANEL_MESSAGE_READY = 'koshko:ready';
 export const PANEL_MESSAGE_HEARTBEAT = 'koshko:heartbeat';
 
@@ -35,11 +32,6 @@ export type CaptureTransportMessage =
   | CaptureSignalTransportMessage
   | CaptureStateMutationTransportMessage;
 
-export interface SyncOriginsMessage {
-  type: typeof PANEL_MESSAGE_SYNC_ORIGINS;
-  origins: string[];
-}
-
 export interface ActivateOriginMessage {
   type: typeof PANEL_MESSAGE_ACTIVATE_ORIGIN;
   origin: string;
@@ -56,15 +48,6 @@ export interface ActivationResponse {
   error?: string;
 }
 
-export interface SetPausedMessage {
-  type: typeof PANEL_MESSAGE_SET_PAUSED;
-  paused: boolean;
-}
-
-export interface ClearMessage {
-  type: typeof PANEL_MESSAGE_CLEAR;
-}
-
 export interface PanelReadyMessage {
   type: typeof PANEL_MESSAGE_READY;
 }
@@ -78,11 +61,8 @@ export type PanelToBackgroundControlMessage = PanelHeartbeatMessage;
 
 export type BackgroundMessage =
   | CaptureTransportMessage
-  | SyncOriginsMessage
   | ActivateOriginMessage
-  | ReconcilePermissionsMessage
-  | SetPausedMessage
-  | ClearMessage;
+  | ReconcilePermissionsMessage;
 
 export interface PanelSignalCaptureMessage {
   type: typeof PANEL_MESSAGE_CAPTURE;
@@ -99,3 +79,9 @@ export interface PanelStateMutationCaptureMessage {
 export type PanelCaptureMessage =
   | PanelSignalCaptureMessage
   | PanelStateMutationCaptureMessage;
+
+export function parseTabId(value: unknown): number | null {
+  if (typeof value !== 'string' || !/^\d+$/.test(value)) return null;
+  const tabId = Number(value);
+  return Number.isSafeInteger(tabId) && tabId >= 0 ? tabId : null;
+}

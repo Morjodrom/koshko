@@ -62,7 +62,6 @@ h1, h2, p { margin: 0; }
 h1 { font-size: clamp(1.35rem, 2vw, 1.75rem); letter-spacing: -.03em; }
 h2 { font-size: 1rem; }
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; clip-path: inset(50%); }
-.eyebrow { margin: 0 0 4px; color: var(--noir-accent); font-size: .68rem; font-weight: 800; letter-spacing: .16em; text-transform: uppercase; }
 .muted { color: var(--noir-muted); }
 
 .brand { display: inline-flex; align-items: center; gap: 10px; color: var(--noir-ink); }

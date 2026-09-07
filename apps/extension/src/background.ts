@@ -6,7 +6,6 @@ import {
   PANEL_MESSAGE_CAPTURE,
   PANEL_MESSAGE_ACTIVATE_ORIGIN,
   PANEL_MESSAGE_RECONCILE_PERMISSIONS,
-  PANEL_MESSAGE_SYNC_ORIGINS,
   type CaptureTransportMessage,
   type BackgroundMessage,
   type PanelCaptureMessage,
@@ -50,13 +49,6 @@ chrome.runtime.onMessage.addListener((message: BackgroundMessage, sender, sendRe
 
   if (message.type === PANEL_MESSAGE_CAPTURE) {
     void routeCaptureMessage(message, sender);
-    return;
-  }
-
-  if (message.type === PANEL_MESSAGE_SYNC_ORIGINS) {
-    if (Array.isArray(message.origins) && message.origins.every((origin) => typeof origin === 'string')) {
-      void permissionCoordinator.replace(message.origins);
-    }
     return;
   }
 

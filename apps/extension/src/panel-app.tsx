@@ -8,19 +8,16 @@ import {
 } from 'react';
 import type {
   CapturedSignalV1,
-  CapturedStateMutationV1,
   JsonObject,
 } from '@koshko/protocol';
-import {
-  PANEL_MESSAGE_CAPTURE,
-  PANEL_MESSAGE_CLEAR,
-  PANEL_MESSAGE_SET_PAUSED,
-} from './shared';
+import type { PanelCaptureMessage } from './shared';
 import {
   KoshkoRepository,
   actorKey,
   formatActor,
   formatDateTime,
+  getActorColumns,
+  isCapturedSignal,
   type KoshkoLogEntry,
   type KoshkoStateSnapshot,
   type KoshkoTimelineActor,
@@ -83,7 +80,7 @@ export function PanelApp({
   );
   const [logQuery, setLogQuery] = useState('');
   const [selectedActorKeys, setSelectedActorKeys] = useState<ReadonlySet<string>>(
-    () => new Set(getLogActors(repository.getDisplayLog()).map((actor) => actor.key)),
+    () => new Set(getActorColumns(repository.getDisplayLog()).map((actor) => actor.key)),
   );
   const [selectedLogTypes, setSelectedLogTypes] = useState<ReadonlySet<LogEntryType>>(
     new Set(['signal']),
@@ -92,7 +89,7 @@ export function PanelApp({
     ReadonlySet<string>
   >(new Set());
   const knownActorKeys = useRef(
-    new Set(getLogActors(repository.getDisplayLog()).map((actor) => actor.key)),
+    new Set(getActorColumns(repository.getDisplayLog()).map((actor) => actor.key)),
   );
   const targetRevision = useRef(0);
   const grantInFlight = useRef(false);
@@ -182,7 +179,7 @@ export function PanelApp({
       setDisplayState(repository.getDisplayState());
       setDisplayStateHistory(repository.getDisplayStateHistory());
       setSelectedStateSnapshotIndex(repository.getSelectedStateSnapshotIndex());
-      const discoveredActorKeys = getLogActors(log).map((actor) => actor.key);
+      const discoveredActorKeys = getActorColumns(log).map((actor) => actor.key);
       const newActorKeys = discoveredActorKeys.filter(
         (key) => !knownActorKeys.current.has(key),
       );
@@ -202,16 +199,8 @@ export function PanelApp({
           ),
       );
     };
-    const onMessage = (message: { type: string; kind?: string; captured?: unknown }): void => {
-      if (message.type !== PANEL_MESSAGE_CAPTURE || !message.captured) return;
-      if (message.kind === 'signal') {
-        repository.record(message.captured as CapturedSignalV1);
-      } else if (message.kind === 'state-mutation') {
-        repository.record(message.captured as CapturedStateMutationV1);
-      } else {
-        return;
-      }
-      syncFromRepository();
+    const onMessage = (message: PanelCaptureMessage): void => {
+      repository.record(message.captured);
     };
     const unsubscribe = repository.subscribe(syncFromRepository);
     const unsubscribeMessages = connection.subscribe(onMessage);
@@ -224,16 +213,8 @@ export function PanelApp({
     };
   }, [connection, repository]);
 
-  const sendCommand = (message: unknown): void => {
-    connection.send(message);
-  };
-
   const togglePaused = (): void => {
     repository.setPaused(!repository.isPaused);
-    sendCommand({
-      type: PANEL_MESSAGE_SET_PAUSED,
-      paused: repository.isPaused,
-    });
   };
   const grantAccess = (site: InspectedSite): void => {
     const grantRevision = targetRevision.current;
@@ -263,7 +244,6 @@ export function PanelApp({
   const clear = (): void => {
     setExpandedSignalIds(new Set());
     repository.clear();
-    sendCommand({ type: PANEL_MESSAGE_CLEAR });
   };
   const selectStateSnapshot = (index: number | null): void => {
     repository.selectStateSnapshot(index);
@@ -275,9 +255,9 @@ export function PanelApp({
       return next;
     });
   }, []);
-  const actors = repository.getActorColumns();
   const signals = displaySignals;
-  const logActors = getLogActors(displayLog);
+  const actors = getActorColumns(signals);
+  const logActors = getActorColumns(displayLog);
   const actorFilterActive = logActors.some(
     (actor) => !selectedActorKeys.has(actor.key),
   );
@@ -288,7 +268,7 @@ export function PanelApp({
       return false;
     }
     if (!actorFilterActive) return true;
-    return isCapturedSignalEntry(entry) && matchesSelectedActor(entry, selectedActorKeys);
+    return isCapturedSignal(entry) && matchesSelectedActor(entry, selectedActorKeys);
   });
 
   return (
@@ -681,7 +661,7 @@ function Log({
           <span>{emptyMessage[1]}</span>
         </div>
       ) : entries.map((entry, index) => {
-        const isSignal = isCapturedSignalEntry(entry);
+        const isSignal = isCapturedSignal(entry);
         const metadata = isSignal ? entry.signal : entry.mutation;
         const type = isSignal ? 'Signal' : 'State';
         return (
@@ -706,31 +686,11 @@ function Log({
   );
 }
 
-function getLogActors(entries: KoshkoLogEntry[]): KoshkoTimelineActor[] {
-  const actors: KoshkoTimelineActor[] = [];
-  const seen = new Set<string>();
-  for (const entry of entries) {
-    if (!isCapturedSignalEntry(entry)) continue;
-    for (const reference of [entry.signal.source, entry.signal.target]) {
-      if (!reference) continue;
-      const key = actorKey(reference);
-      if (seen.has(key)) continue;
-      seen.add(key);
-      actors.push({ key, reference });
-    }
-  }
-  return actors;
-}
-
 function matchesSelectedActor(entry: CapturedSignalV1, selectedActorKeys: ReadonlySet<string>): boolean {
   return selectedActorKeys.has(actorKey(entry.signal.source))
     || (entry.signal.target !== undefined && selectedActorKeys.has(actorKey(entry.signal.target)));
 }
 
 function getLogEntryType(entry: KoshkoLogEntry): LogEntryType {
-  return isCapturedSignalEntry(entry) ? 'signal' : 'state';
-}
-
-function isCapturedSignalEntry(entry: KoshkoLogEntry): entry is CapturedSignalV1 {
-  return 'signal' in entry;
+  return isCapturedSignal(entry) ? 'signal' : 'state';
 }
