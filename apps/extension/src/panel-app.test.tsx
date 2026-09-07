@@ -385,51 +385,18 @@ describe('PanelApp', () => {
     const forward = document.querySelector<HTMLElement>(
       '[data-signal-name="host.open-widget"]',
     )!;
-    const forwardArrow = within(forward).getByTestId('timeline-arrow');
     expect(forward.dataset.direction).toBe('forward');
-    expect(forward.dataset.sourceIndex).toBe('0');
-    expect(forward.dataset.targetIndex).toBe('1');
-    expect(forward.dataset.actorCount).toBe('3');
-    expect(forwardArrow.getAttribute('data-source-actor-key')).toBe('host::');
-    expect(forwardArrow.getAttribute('data-target-actor-key')).toBe(
-      'widget::embedded',
-    );
-    expect(forwardArrow.getAttribute('aria-label')).toBe(
+    expect(forward.getAttribute('title')).toBe(
       'Host application sends host.open-widget to Widget · embedded',
     );
-    expect(forwardArrow.className).toContain('forward');
-    expect(forwardArrow.getAttribute('style')).toContain(
-      '--timeline-source-index: 0',
-    );
-    expect(forwardArrow.getAttribute('style')).toContain(
-      '--timeline-arrow-start: 16.666666666666664%',
-    );
-    expect(forwardArrow.getAttribute('style')).toContain(
-      '--timeline-arrow-width: 33.333333333333336%',
-    );
-
-    const selfTargetedCell = document.querySelector<HTMLElement>(
-      '[data-signal-name="widget.self-transition"] [data-actor-key="widget::processing"]',
-    )!;
-    expect(selfTargetedCell.className).toContain('source');
-    expect(selfTargetedCell.className).not.toContain('target');
-    expect(selfTargetedCell.textContent).not.toContain('→');
-
-    const targetlessInternalCell = document.querySelector<HTMLElement>(
-      '[data-signal-name="widget.local-cache-updated"] [data-actor-key="widget::embedded"]',
-    )!;
-    expect(targetlessInternalCell.className).toContain('source');
-    expect(targetlessInternalCell.className).not.toContain('target');
-    expect(
-      document.querySelectorAll(
-        '[data-signal-name="widget.self-transition"] [data-testid="timeline-arrow"]',
-      ),
-    ).toHaveLength(0);
-    expect(
-      document.querySelectorAll(
-        '[data-signal-name="widget.local-cache-updated"] [data-testid="timeline-arrow"]',
-      ),
-    ).toHaveLength(0);
+    expect(document.querySelector<HTMLElement>(
+      '[data-signal-name="widget.self-transition"]',
+    )?.dataset.direction).toBe('internal');
+    expect(document.querySelector<HTMLElement>(
+      '[data-signal-name="widget.local-cache-updated"]',
+    )?.dataset.direction).toBe('internal');
+    expect(screen.queryByLabelText('Timeline overview')).toBeNull();
+    expect(screen.getAllByTestId('timeline-separator')).toHaveLength(2);
   });
 
   it('renders reverse arrows, compact local timestamps, and independently expandable details', () => {
@@ -473,27 +440,23 @@ describe('PanelApp', () => {
     const row = document.querySelector<HTMLElement>(
       '[data-signal-name="widget.completed"]',
     )!;
-    const arrow = within(row).getByTestId('timeline-arrow');
     expect(row.dataset.direction).toBe('reverse');
-    expect(arrow.className).toContain('reverse');
-    expect(arrow.getAttribute('aria-label')).toBe(
+    expect(row.getAttribute('title')).toBe(
       'Widget · embedded sends widget.completed to Host application',
     );
-    expect(within(row).getByTestId('timeline-time').textContent).toBe(
-      formatTime(occurredAt),
-    );
-    expect(
-      row.querySelector('.timeline-stamp')?.getAttribute('title'),
-    ).toContain('2026-09-05T12:34:56.789Z');
-    expect(within(row).queryByTestId('timeline-details')).toBeNull();
+    expect(screen.getAllByTestId('timeline-time').some(
+      (time) => time.textContent === formatTime(occurredAt),
+    )).toBe(true);
+    expect(screen.getAllByTestId('timeline-time-entry').some(
+      (entry) => entry.getAttribute('title')?.includes('2026-09-05T12:34:56.789Z'),
+    )).toBe(true);
+    expect(screen.queryByTestId('timeline-details')).toBeNull();
 
-    const control = within(row).getByRole('button', {
-      name: 'widget.completed',
-    });
+    const control = screen.getByRole('button', { name: 'widget.completed' });
     expect(control.getAttribute('aria-expanded')).toBe('false');
     fireEvent.click(control);
     expect(control.getAttribute('aria-expanded')).toBe('true');
-    expect(within(row).getByTestId('timeline-details').textContent).toContain(
+    expect(screen.getByTestId('timeline-details').textContent).toContain(
       '"result": "ok"',
     );
 
@@ -504,7 +467,6 @@ describe('PanelApp', () => {
     expect(screen.getAllByTestId('timeline-details')).toHaveLength(2);
 
     fireEvent.click(control);
-    expect(within(row).queryByTestId('timeline-details')).toBeNull();
     expect(screen.getAllByTestId('timeline-details')).toHaveLength(1);
   });
 
