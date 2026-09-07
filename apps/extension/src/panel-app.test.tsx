@@ -160,6 +160,14 @@ function mountPanel(accessController = createAccessController()): {
   return { port, repository, downloadJsonl, unmount };
 }
 
+function expandGlobalState(): HTMLElement {
+  const tree = screen.getByLabelText('Selected global state');
+  const root = tree.querySelector('.jer-collection-header-row');
+  if (!(root instanceof HTMLElement)) throw new Error('Root state node was not rendered');
+  fireEvent.click(root, { altKey: true });
+  return tree;
+}
+
 describe('PanelApp', () => {
   afterEach(cleanup);
 
@@ -298,7 +306,7 @@ describe('PanelApp', () => {
       'No signals yet.',
     );
     fireEvent.click(screen.getByRole('button', { name: 'Global State' }));
-    expect(screen.getByTestId('global-state').textContent).toBe('{}');
+    expect(screen.getByLabelText('Selected global state').textContent).toContain('0 items');
 
     act(() => {
       port.emitCapture(captured());
@@ -603,9 +611,10 @@ describe('PanelApp', () => {
     expect(screen.getByTestId('log-empty-state').textContent).toContain('No log entries match the current filters.');
 
     fireEvent.click(screen.getByRole('button', { name: 'Global State' }));
-    expect(screen.getByTestId('global-state').textContent).toBe(
-      JSON.stringify({ checkout: { total: 100, currency: 'RUB' } }, null, 2),
-    );
+    const stateTree = expandGlobalState();
+    expect(stateTree.textContent).toContain('checkout');
+    expect(stateTree.textContent).toContain('total:100');
+    expect(stateTree.textContent).toContain('currency:"RUB"');
     expect(screen.getByRole('button', { name: 'Global State' }).getAttribute('aria-pressed')).toBe('true');
 
     fireEvent.click(screen.getByTestId('export-button'));
@@ -665,14 +674,14 @@ describe('PanelApp', () => {
     expect(screen.getByRole('button', { name: 'Live' }).hasAttribute('disabled')).toBe(true);
 
     fireEvent.click(within(history).getByRole('button', { name: /Initial state/ }));
-    expect(screen.getByTestId('global-state').textContent).toBe('{}');
+    expect(screen.getByLabelText('Selected global state').textContent).toContain('0 items');
     expect(screen.getByTestId('state-position').textContent).toBe('Snapshot 1 of 3 · pinned');
     expect(screen.getByRole('button', { name: 'Previous' }).hasAttribute('disabled')).toBe(true);
 
     fireEvent.click(screen.getByRole('button', { name: 'Next' }));
-    expect(screen.getByTestId('global-state').textContent).toBe('{\n  "checkout": {\n    "total": 100\n  }\n}');
+    expect(expandGlobalState().textContent).toContain('total:100');
     fireEvent.click(screen.getByRole('button', { name: 'Next' }));
-    expect(screen.getByTestId('global-state').textContent).toContain('200');
+    expect(screen.getByLabelText('Selected global state').textContent).toContain('200');
     expect(screen.getByTestId('state-position').textContent).toBe('Snapshot 3 of 3 · pinned');
 
     fireEvent.click(screen.getByRole('button', { name: 'Previous' }));
@@ -687,17 +696,17 @@ describe('PanelApp', () => {
         },
       },
     )));
-    expect(screen.getByTestId('global-state').textContent).toContain('100');
+    expect(screen.getByLabelText('Selected global state').textContent).toContain('100');
     expect(screen.getByTestId('state-position').textContent).toBe('Snapshot 2 of 4 · pinned');
 
     fireEvent.click(screen.getByRole('button', { name: 'Live' }));
-    expect(screen.getByTestId('global-state').textContent).toContain('300');
+    expect(screen.getByLabelText('Selected global state').textContent).toContain('300');
     expect(screen.getByTestId('state-position').textContent).toBe('Live · following snapshot 4 of 4');
 
     fireEvent.click(screen.getByTestId('clear-button'));
     expect(within(screen.getByTestId('state-history-list')).getAllByRole('button')).toHaveLength(1);
     expect(screen.getByTestId('state-position').textContent).toBe('Live · following snapshot 1 of 1');
-    expect(screen.getByTestId('global-state').textContent).toBe('{}');
+    expect(screen.getByLabelText('Selected global state').textContent).toContain('0 items');
   });
 
   it('resets pinned state history when the top-level document changes', () => {
@@ -726,6 +735,39 @@ describe('PanelApp', () => {
     expect(screen.getByTestId('state-position').textContent).toBe('Live · following snapshot 2 of 2');
     expect(screen.getByTestId('global-state').textContent).toContain('after-navigation');
     expect(screen.getByTestId('global-state').textContent).not.toContain('before-navigation');
+  });
+
+  it('searches within the selected state snapshot', async () => {
+    const { port } = mountPanel();
+    act(() => {
+      port.emitStateMutation(capturedStateMutation([
+        { op: 'add', path: '/checkout', value: { total: 100 } },
+      ]));
+      port.emitStateMutation(capturedStateMutation(
+        [{ op: 'replace', path: '/checkout/total', value: 200 }],
+        {
+          mutation: {
+            ...capturedStateMutation([]).mutation,
+            id: 'mutation-2',
+            producerSequence: 2,
+            patch: [{ op: 'replace', path: '/checkout/total', value: 200 }],
+          },
+        },
+      ));
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Global State' }));
+
+    fireEvent.change(screen.getByRole('searchbox', { name: 'Search global state nodes' }), {
+      target: { value: 'total' },
+    });
+    await waitFor(() => {
+      expect(screen.getByLabelText('Selected global state').textContent).toContain('total:200');
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Previous' }));
+    await waitFor(() => {
+      expect(screen.getByLabelText('Selected global state').textContent).toContain('total:100');
+    });
   });
 
   it('filters the combined log by substring, actor, and entry type while retaining filters between tabs', () => {
@@ -844,7 +886,8 @@ describe('PanelApp', () => {
       ),
     );
     fireEvent.click(screen.getByRole('button', { name: 'Global State' }));
-    expect(screen.getByTestId('global-state').textContent).toBe('{\n  "ready": true\n}');
+    const stateTree = expandGlobalState();
+    expect(stateTree.textContent).toContain('ready:true');
 
     fireEvent.click(screen.getByTestId('pause-button'));
     act(() =>
@@ -855,11 +898,11 @@ describe('PanelApp', () => {
         ),
       ),
     );
-    expect(screen.getByTestId('global-state').textContent).toBe('{\n  "ready": true\n}');
+    expect(stateTree.textContent).toContain('ready:true');
     expect(screen.getByTestId('capture-status').textContent).toContain('+1 unread');
 
     fireEvent.click(screen.getByTestId('pause-button'));
-    expect(screen.getByTestId('global-state').textContent).toBe('{\n  "ready": false\n}');
+    expect(stateTree.textContent).toContain('ready:false');
 
     act(() =>
       port.emitStateMutation(
@@ -870,7 +913,7 @@ describe('PanelApp', () => {
       ),
     );
     expect(repository.getState()).toEqual({ ready: false });
-    expect(screen.getByTestId('global-state').textContent).toBe('{\n  "ready": false\n}');
+    expect(stateTree.textContent).toContain('ready:false');
   });
 
   it('unsubscribes from the port on unmount', () => {

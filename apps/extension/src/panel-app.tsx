@@ -32,6 +32,7 @@ import type {
   PanelAccessSnapshot,
 } from './panel-access';
 import { BrandLockup, Icon } from './brand';
+import { GlobalStateViewer } from './global-state-viewer';
 import type { ManagedPanelConnection, PanelConnectionStatus } from './panel-connection';
 
 export interface PanelAppProps {
@@ -608,9 +609,7 @@ function GlobalState({
       </div>
       <div className="state-value">
         <h2>Selected state</h2>
-        <pre className="global-state" data-testid="global-state" aria-label="Selected global state">
-          {JSON.stringify(state, null, 2)}
-        </pre>
+        <GlobalStateViewer state={state} />
       </div>
     </div>
   );
