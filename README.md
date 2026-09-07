@@ -7,9 +7,10 @@ Disposable Chrome/Chromium-only prototype for inspecting `koshko` window message
 - Chrome/Chromium only.
 - Capture only explicit `koshko` window messages.
 - Validate and redact payloads before they reach the panel.
-- Show two simple views in DevTools:
+- Show three simple views in DevTools:
   - Timeline
   - Log
+  - Global State
 - Keep everything in-memory and easy to throw away later.
 - No search, import, analytics, remote code, or production packaging.
 - Local demo is dev-only: two static HTML pages served by Vite.
@@ -20,6 +21,7 @@ Disposable Chrome/Chromium-only prototype for inspecting `koshko` window message
 - `examples/neutral-demo/` — minimal Vite demo with two pages
 - `packages/protocol/` — protocol validation and normalization
 - `packages/emitter/` — tiny page-side emitter helper
+- `packages/nanostores/` — Nano Stores state bridge for Global State
 
 ## Run locally
 
@@ -65,7 +67,7 @@ WXT will build a dev-only Chrome extension output under
 5. Trigger the app action that emits `koshko` messages.
 6. Read the Timeline or Log panel.
 
-Important: the extension cannot infer app semantics by itself. A real product must emit messages with the shared `@koshko/emitter` helper.
+Important: the extension cannot infer app semantics by itself. A real product must emit messages with the shared `@koshko/emitter` helper, or register Nano Stores with `@koshko/nanostores` when that state manager is used.
 
 ## Notes
 

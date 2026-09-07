@@ -9,7 +9,10 @@
   },
   "dependencies": {
     "@koshko/emitter": "file:../../packages/emitter",
-    "@koshko/protocol": "file:../../packages/protocol"
+    "@koshko/nanostores": "file:../../packages/nanostores",
+    "@koshko/protocol": "file:../../packages/protocol",
+    "@nanostores/logger": "^1.1.0",
+    "nanostores": "^1.5.3"
   },
   "devDependencies": {
     "typescript": "^5.7.3",

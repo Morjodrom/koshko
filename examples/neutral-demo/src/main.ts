@@ -1,5 +1,18 @@
 import { createActorEmitter, createStateEmitter } from '@koshko/emitter';
+import { connectNanoStores } from '@koshko/nanostores';
+import { logger } from '@nanostores/logger';
 import type { KoshkoSignalV1 } from '@koshko/protocol';
+import {
+  $counter,
+  $profile,
+  getCounter,
+  getProfile,
+  incrementCounter,
+  incrementProfileVisits,
+  resetCounter,
+  resetProfile,
+  setProfileName,
+} from './nanostores';
 import {
   DEMO_ACTORS,
   runTopScenario,
@@ -13,16 +26,32 @@ const sdkEmitter = createActorEmitter(DEMO_ACTORS.sdk);
 const stateEmitter = createStateEmitter({ producerId: 'neutral-demo-state' });
 const log = document.querySelector<HTMLElement>('#log')!;
 const status = document.querySelector<HTMLElement>('#status')!;
+const nanoStoresValue = document.querySelector<HTMLElement>('#nanostores-value')!;
 const frames = new Map<FrameCommand['instance'], HTMLIFrameElement>([
   ['embedded', document.querySelector<HTMLIFrameElement>('#frame-embedded')!],
   ['processing', document.querySelector<HTMLIFrameElement>('#frame-processing')!],
 ]);
 const events: string[] = [];
+const disconnectNanoStores = connectNanoStores({
+  counter: $counter,
+  profile: $profile,
+});
+const disconnectNanoStoresLogger = logger({
+  counter: $counter,
+  profile: $profile,
+});
 
 renderStatus('Ready. Choose a repeatable scenario. Each run receives a new correlation ID.');
 wireWindow();
 wireScenarioButtons();
 wireStateMutationButtons();
+wireNanoStoresControls();
+window.addEventListener('pagehide', () => {
+  disconnectNanoStores();
+  disconnectNanoStoresLogger();
+}, { once: true });
+$counter.subscribe(renderNanoStoresValue);
+$profile.subscribe(renderNanoStoresValue);
 renderLog();
 
 function wireScenarioButtons(): void {
@@ -52,6 +81,33 @@ function wireStateMutationButtons(): void {
       { op: 'remove', path: '/demo/message' },
     ]);
     renderStatus('Removed the global state message. Add state first.');
+  });
+}
+
+function wireNanoStoresControls(): void {
+  document.querySelector<HTMLButtonElement>('[data-nanostore-mutation="counter-increment"]')?.addEventListener('click', () => {
+    incrementCounter();
+    renderStatus('Incremented the Nano Stores counter.');
+  });
+  document.querySelector<HTMLButtonElement>('[data-nanostore-mutation="counter-reset"]')?.addEventListener('click', () => {
+    resetCounter();
+    renderStatus('Reset the Nano Stores counter.');
+  });
+  document.querySelector<HTMLButtonElement>('[data-nanostore-mutation="profile-visit"]')?.addEventListener('click', () => {
+    incrementProfileVisits();
+    renderStatus('Incremented Nano Stores profile visits.');
+  });
+  document.querySelector<HTMLButtonElement>('[data-nanostore-mutation="profile-name"]')?.addEventListener('click', () => {
+    const name = window.prompt('Profile name', getProfile().name);
+    if (name === null) {
+      return;
+    }
+    setProfileName(name);
+    renderStatus('Updated the Nano Stores profile name.');
+  });
+  document.querySelector<HTMLButtonElement>('[data-nanostore-mutation="profile-reset"]')?.addEventListener('click', () => {
+    resetProfile();
+    renderStatus('Reset the Nano Stores profile.');
   });
 }
 
@@ -102,6 +158,13 @@ function record(source: string, signal: unknown): void {
 
 function renderLog(): void {
   log.textContent = events.slice(0, 14).join('\n\n---\n\n');
+}
+
+function renderNanoStoresValue(): void {
+  nanoStoresValue.textContent = JSON.stringify({
+    counter: getCounter(),
+    profile: getProfile(),
+  }, null, 2);
 }
 
 function renderStatus(text: string): void {

@@ -11,6 +11,8 @@
       .shell { display: grid; gap: 12px; max-width: 980px; margin: auto; }
       .row { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
       .frames { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); }
+      .nanostores { display: grid; gap: 12px; padding: 12px; border: 1px solid color-mix(in oklab, CanvasText 15%, transparent); border-radius: 8px; }
+      .nanostores h2 { margin: 0; font-size: 1.1rem; }
       iframe { width: 100%; min-height: 180px; border: 1px solid color-mix(in oklab, CanvasText 15%, transparent); border-radius: 8px; }
       pre { margin: 0; padding: 12px; background: color-mix(in oklab, Canvas 85%, CanvasText 15%); border-radius: 8px; white-space: pre-wrap; max-height: 460px; overflow: auto; }
       button { padding: 8px 12px; }
@@ -34,6 +36,20 @@
         <button data-state-mutation="replace">Replace global state value</button>
         <button data-state-mutation="remove">Remove global state value</button>
       </div>
+      <section class="nanostores" aria-labelledby="nanostores-heading">
+        <h2 id="nanostores-heading">Nano Stores</h2>
+        <p class="hint">These action-wrapped mutations are bridged to <code>nanostores.counter</code> and <code>nanostores.profile</code> in Koshko Global State.</p>
+        <div class="row" aria-label="Nano Stores counter mutations">
+          <button data-nanostore-mutation="counter-increment">Increment counter</button>
+          <button data-nanostore-mutation="counter-reset">Reset counter</button>
+        </div>
+        <div class="row" aria-label="Nano Stores profile mutations">
+          <button data-nanostore-mutation="profile-visit">Add profile visit</button>
+          <button data-nanostore-mutation="profile-name">Change profile name</button>
+          <button data-nanostore-mutation="profile-reset">Reset profile</button>
+        </div>
+        <pre id="nanostores-value" aria-live="polite"></pre>
+      </section>
       <div class="frames">
         <iframe id="frame-embedded" title="Embedded Widget" src="/frame.html?instance=embedded"></iframe>
         <iframe id="frame-processing" title="Processing Widget" src="/frame.html?instance=processing"></iframe>

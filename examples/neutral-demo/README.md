@@ -18,6 +18,25 @@ The page creates four actor types: **User**, **Host application**, **Client SDK*
 
 The in-page log is only a local aid; Koshko captures the signals independently from the top page and each iframe. The widget button can also emit a local metadata-rich flow.
 
+## Nano Stores bridge
+
+The page also registers two Nano Stores with `@koshko/nanostores` at startup:
+
+- `counter` is an atom with increment and reset actions;
+- `profile` is a map with name and visit-count mutations.
+
+Use the **Nano Stores** controls to mutate them. Their local values are shown on the page, while Koshko Global State contains them under the `nanostores` branch alongside the existing manually controlled `demo` branch:
+
+```json
+{
+  "demo": { "message": "Added from the neutral demo", "count": 1 },
+  "nanostores": {
+    "counter": 1,
+    "profile": { "name": "Ada", "visits": 1 }
+  }
+}
+```
+
 ## Install in Google Chrome or Chromium-based browsers
 
 1. Start the demo: `npm run dev:demo`.

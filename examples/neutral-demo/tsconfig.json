@@ -14,6 +14,9 @@
       "@koshko/emitter": [
         "../../packages/emitter/src/index"
       ],
+      "@koshko/nanostores": [
+        "../../packages/nanostores/src/index"
+      ],
       "@koshko/protocol": [
         "../../packages/protocol/src/index"
       ]
