@@ -16,6 +16,7 @@
       iframe { width: 100%; min-height: 180px; border: 1px solid color-mix(in oklab, CanvasText 15%, transparent); border-radius: 8px; }
       pre { margin: 0; padding: 12px; background: color-mix(in oklab, Canvas 85%, CanvasText 15%); border-radius: 8px; white-space: pre-wrap; max-height: 460px; overflow: auto; }
       button { padding: 8px 12px; }
+      input[type="number"] { width: 4rem; padding: 7px; }
       .hint { opacity: .75; margin: 0; }
     </style>
   </head>
@@ -35,6 +36,17 @@
         <button data-state-mutation="add">Add global state</button>
         <button data-state-mutation="replace">Replace global state value</button>
         <button data-state-mutation="remove">Remove global state value</button>
+      </div>
+      <div class="row" aria-label="Large global state fixture">
+        <label>
+          Maximum depth
+          <input id="large-state-depth" type="number" min="2" max="5" step="1" value="5" />
+        </label>
+        <label>
+          Root objects
+          <input id="large-state-roots" type="number" min="1" max="10" step="1" value="10" />
+        </label>
+        <button id="generate-large-state">Generate large state</button>
       </div>
       <section class="nanostores" aria-labelledby="nanostores-heading">
         <h2 id="nanostores-heading">Nano Stores</h2>

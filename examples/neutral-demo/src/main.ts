@@ -2,6 +2,7 @@ import { createActorEmitter, createStateEmitter } from '@koshko/emitter';
 import { connectNanoStores } from '@koshko/nanostores';
 import { logger } from '@nanostores/logger';
 import type { KoshkoSignalV1 } from '@koshko/protocol';
+import { generateLargeState } from './large-state';
 import {
   $counter,
   $profile,
@@ -45,6 +46,7 @@ renderStatus('Ready. Choose a repeatable scenario. Each run receives a new corre
 wireWindow();
 wireScenarioButtons();
 wireStateMutationButtons();
+wireLargeStateControls();
 wireNanoStoresControls();
 window.addEventListener('pagehide', () => {
   disconnectNanoStores();
@@ -81,6 +83,26 @@ function wireStateMutationButtons(): void {
       { op: 'remove', path: '/demo/message' },
     ], { label: 'Remove demo message' });
     renderStatus('Removed the global state message. Add state first.');
+  });
+}
+
+function wireLargeStateControls(): void {
+  const depthInput = document.querySelector<HTMLInputElement>('#large-state-depth')!;
+  const rootsInput = document.querySelector<HTMLInputElement>('#large-state-roots')!;
+
+  document.querySelector<HTMLButtonElement>('#generate-large-state')?.addEventListener('click', () => {
+    try {
+      const depth = depthInput.valueAsNumber;
+      const rootObjectCount = rootsInput.valueAsNumber;
+      const value = generateLargeState(depth, rootObjectCount);
+
+      stateEmitter.mutate([
+        { op: 'add', path: '/largeFixture', value },
+      ], { label: 'Generate large state fixture' });
+      renderStatus(`Generated ${rootObjectCount} reproducible root objects with maximum depth ${depth}.`);
+    } catch (error) {
+      renderStatus(error instanceof Error ? error.message : 'Unable to generate large state.');
+    }
   });
 }
 

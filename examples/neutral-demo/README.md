@@ -18,6 +18,14 @@ The page creates four actor types: **User**, **Host application**, **Client SDK*
 
 The in-page log is only a local aid; Koshko captures the signals independently from the top page and each iframe. The widget button can also emit a local metadata-rich flow.
 
+## Large global state fixture
+
+Use the **Generate large state** controls to add a reproducible fixture under the
+`largeFixture` branch in Koshko Global State. Choose a maximum depth from 2 to 5
+and between 1 and 10 root objects. The same pair of inputs always produces the
+same nested arrays, objects, numbers, booleans, short strings, and long string.
+Generating it again replaces only `largeFixture`; the other demo state remains.
+
 ## Nano Stores bridge
 
 The page also registers two Nano Stores with `@koshko/nanostores` at startup:
