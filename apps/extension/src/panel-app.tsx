@@ -184,7 +184,7 @@ export function PanelApp({
           aria-pressed={activeTab === 'timeline'}
           onClick={() => setActiveTab('timeline')}
         >
-          <Icon name="timeline" className="tab-icon" />
+          <Icon name="clock" className="tab-icon" />
           Timeline
         </button>
         <button
@@ -200,7 +200,7 @@ export function PanelApp({
           aria-pressed={activeTab === 'state'}
           onClick={() => setActiveTab('state')}
         >
-          <Icon name="activity" className="tab-icon" />
+          <Icon name="graph" className="tab-icon" />
           Global State
         </button>
       </nav>
