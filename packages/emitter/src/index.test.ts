@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { createActorEmitter } from './index';
+import { createActorEmitter, createStateEmitter } from './index';
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -56,5 +56,98 @@ describe('actor emitter', () => {
     expect(first.producerSequence).toBe(1);
     expect(second.producerSequence).toBe(2);
     expect(second.occurredAt).toBeGreaterThanOrEqual(first.occurredAt);
+  });
+});
+
+describe('state emitter', () => {
+  it('posts normalized state mutations with a monotonic producer sequence', () => {
+    const postMessage = vi.fn();
+    vi.stubGlobal('window', { postMessage });
+    vi.stubGlobal('performance', { timeOrigin: 200, now: () => 50 });
+
+    const emitter = createStateEmitter({ producerId: 'demo-state' });
+    const first = emitter.mutate([
+      {
+        op: 'add',
+        path: '/checkout',
+        value: {
+          ready: true,
+          token: 'secret',
+          returnUrl: 'https://example.com/done?order=42',
+        },
+      },
+    ]);
+    const second = emitter.mutate(
+      [{ op: 'replace', path: '/checkout/ready', value: false }],
+      { occurredAt: 999 },
+    );
+
+    expect(first).toMatchObject({
+      protocol: 'koshko',
+      version: 1,
+      producerId: 'demo-state',
+      producerSequence: 1,
+      occurredAt: 250,
+      patch: [{
+        op: 'add',
+        path: '/checkout',
+        value: {
+          ready: true,
+          token: '[Redacted]',
+          returnUrl: 'https://example.com/done',
+        },
+      }],
+    });
+    expect(second.producerSequence).toBe(2);
+    expect(second.occurredAt).toBe(999);
+    expect(postMessage).toHaveBeenNthCalledWith(1, {
+      protocol: 'koshko',
+      version: 1,
+      type: 'state-mutation',
+      mutation: first,
+    }, '*');
+    expect(postMessage).toHaveBeenNthCalledWith(2, {
+      protocol: 'koshko',
+      version: 1,
+      type: 'state-mutation',
+      mutation: second,
+    }, '*');
+  });
+
+  it('returns a mutation when state transport fails', () => {
+    vi.stubGlobal('window', { postMessage: () => {
+      throw new Error('transport down');
+    } });
+
+    const emitter = createStateEmitter({ producerId: 'demo-state' });
+    expect(() => emitter.mutate([
+      { op: 'add', path: '/ready', value: true },
+    ])).not.toThrow();
+    expect(emitter.mutate([
+      { op: 'remove', path: '/ready' },
+    ])).toMatchObject({
+      producerId: 'demo-state',
+      producerSequence: 2,
+    });
+  });
+
+  it('returns but does not transport an oversized state mutation', () => {
+    const postMessage = vi.fn();
+    vi.stubGlobal('window', { postMessage });
+
+    const emitter = createStateEmitter({ producerId: 'demo-state' });
+    const mutation = emitter.mutate(Array.from({ length: 5 }, (_, index) => ({
+      op: 'add' as const,
+      path: `/large-${index}`,
+      value: 'x'.repeat(16_000),
+    })));
+
+    expect(mutation.patch).toHaveLength(5);
+    expect(mutation.patch[0]).toMatchObject({
+      op: 'add',
+      path: '/large-0',
+      value: expect.stringMatching(/^x+$/),
+    });
+    expect(postMessage).not.toHaveBeenCalled();
   });
 });

@@ -1,30 +1,37 @@
-import { parseKoshkoWindowMessageV1 } from '@koshko/protocol';
-import { PANEL_MESSAGE_CAPTURE } from './shared';
+import { parseKoshkoProtocolWindowMessageV1 } from '@koshko/protocol';
+import {
+  PANEL_MESSAGE_CAPTURE,
+  type CaptureTransportMessage,
+} from './shared';
 
-export function startCapture(): void {
+export function startCapture(): () => void {
   const navigationId = createNavigationId();
 
-  window.addEventListener('message', (event) => {
+  const onMessage = (event: MessageEvent): void => {
     if (event.source !== window) {
       return;
     }
 
-    const parsed = parseKoshkoWindowMessageV1(event.data);
+    const parsed = parseKoshkoProtocolWindowMessageV1(event.data);
     if (!parsed) {
       return;
     }
 
-    const payload = {
-      type: PANEL_MESSAGE_CAPTURE,
-      signal: parsed.signal,
+    const metadata = {
       observedAt: Date.now(),
       navigationId,
       frameUrl: location.href,
       frameOrigin: location.origin,
     };
+    const payload: CaptureTransportMessage = parsed.type === 'signal'
+      ? { type: PANEL_MESSAGE_CAPTURE, kind: 'signal', signal: parsed.signal, ...metadata }
+      : { type: PANEL_MESSAGE_CAPTURE, kind: 'state-mutation', mutation: parsed.mutation, ...metadata };
 
     void chrome.runtime.sendMessage(payload).catch(() => {});
-  });
+  };
+  window.addEventListener('message', onMessage);
+
+  return () => window.removeEventListener('message', onMessage);
 }
 
 function createNavigationId(): string {

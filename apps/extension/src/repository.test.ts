@@ -128,4 +128,78 @@ describe('koshko dev tools repository', () => {
   it('formats timestamps with milliseconds', () => {
     expect(formatTimestamp(Date.parse('2026-09-05T12:34:56.789Z'))).toBe('2026-09-05T12:34:56.789Z');
   });
+
+  it('reconstructs global state, resets it for top-frame navigation and clear, and freezes it while paused', () => {
+    const repo = new KoshkoRepository();
+    const stateMutation = (id: string, navigationId: string, patch: import('@koshko/protocol').KoshkoStateMutationV1['patch']) => ({
+      mutation: {
+        protocol: 'koshko' as const,
+        version: 1 as const,
+        id,
+        producerId: 'state-producer',
+        producerSequence: 1,
+        occurredAt: 1,
+        patch,
+      },
+      observedAt: 1,
+      tabId: 1,
+      frameId: 0,
+      navigationId,
+      frameUrl: 'https://example.com',
+      frameOrigin: 'https://example.com',
+    });
+
+    repo.record(stateMutation('state-1', 'nav-a', [{ op: 'add', path: '/cart', value: { count: 1 } }]));
+    expect(repo.getState()).toEqual({ cart: { count: 1 } });
+    expect(repo.getDisplayState()).toEqual({ cart: { count: 1 } });
+    expect(repo.getCount()).toBe(0);
+
+    repo.setPaused(true);
+    repo.record(stateMutation('state-2', 'nav-a', [{ op: 'replace', path: '/cart/count', value: 2 }]));
+    expect(repo.getState()).toEqual({ cart: { count: 2 } });
+    expect(repo.getDisplayState()).toEqual({ cart: { count: 1 } });
+    expect(repo.getUnreadCount()).toBe(1);
+
+    repo.setPaused(false);
+    expect(repo.getDisplayState()).toEqual({ cart: { count: 2 } });
+
+    repo.record(stateMutation('state-3', 'nav-b', [{ op: 'add', path: '/fresh', value: true }]));
+    expect(repo.getState()).toEqual({ fresh: true });
+    expect(repo.getDisplayState()).toEqual({ fresh: true });
+
+    repo.clear();
+    expect(repo.getState()).toEqual({});
+    expect(repo.getDisplayState()).toEqual({});
+  });
+
+  it('keeps the prior state when a mutation patch cannot be applied atomically', () => {
+    const repo = new KoshkoRepository();
+    const base = {
+      observedAt: 1,
+      tabId: 1,
+      frameId: 0,
+      navigationId: 'nav',
+      frameUrl: 'https://example.com',
+      frameOrigin: 'https://example.com',
+    };
+    repo.record({
+      ...base,
+      mutation: {
+        protocol: 'koshko', version: 1, id: 'state-1', producerId: 'p', producerSequence: 1, occurredAt: 1,
+        patch: [{ op: 'add', path: '/value', value: 1 }],
+      },
+    });
+    repo.record({
+      ...base,
+      mutation: {
+        protocol: 'koshko', version: 1, id: 'state-2', producerId: 'p', producerSequence: 2, occurredAt: 2,
+        patch: [
+          { op: 'replace', path: '/value', value: 2 },
+          { op: 'replace', path: '/missing', value: 3 },
+        ],
+      },
+    });
+
+    expect(repo.getState()).toEqual({ value: 1 });
+  });
 });

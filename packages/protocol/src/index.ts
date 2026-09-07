@@ -1,27 +1,47 @@
 export type {
   KoshkoSeverity,
   KoshkoSignalV1,
+  KoshkoStateAddOperationV1,
+  KoshkoStateRemoveOperationV1,
+  KoshkoStateReplaceOperationV1,
+  KoshkoStatePatchOperationV1,
+  KoshkoStateMutationV1,
+  KoshkoStateMutationWindowMessageV1,
+  KoshkoProtocolWindowMessageV1,
+  AnyKoshkoWindowMessageV1,
   KoshkoWindowMessageV1,
   ActorReference,
+  CapturedStateMutationV1,
   CapturedSignalV1,
   JsonArray,
   JsonObject,
   JsonPrimitive,
   JsonValue,
 } from './types';
-export { koshkoSignalV1JsonSchema } from './validate';
+export { applyStateMutationPatch, isStateMutationPath } from './state';
+export { koshkoSignalV1JsonSchema, koshkoStateMutationV1JsonSchema } from './validate';
 export {
   compareCapturedSignals,
+  createKoshkoStateMutationWindowMessageV1,
   createKoshkoWindowMessageV1,
+  normalizeKoshkoStateMutationV1,
   normalizeKoshkoSignalV1,
   normalizeActorReference,
+  normalizeCapturedStateMutationV1,
   normalizeCapturedSignalV1,
   normalizeJsonValue,
 } from './normalize';
 export {
+  isKoshkoProtocolWindowMessageV1,
   isKoshkoSignalV1,
+  isKoshkoStateMutationV1,
+  isKoshkoStateMutationWindowMessageV1,
+  isKoshkoStatePatchOperationV1,
   isKoshkoWindowMessageV1,
   isActorReference,
+  parseKoshkoProtocolWindowMessageV1,
+  parseKoshkoStateMutationWindowMessageV1,
   parseKoshkoWindowMessageV1,
+  parseCapturedStateMutationV1,
   parseCapturedSignalV1,
 } from './validate';

@@ -1,9 +1,14 @@
 import {
+  createKoshkoStateMutationWindowMessageV1,
   createKoshkoWindowMessageV1,
+  isKoshkoStateMutationV1,
+  normalizeKoshkoStateMutationV1,
   normalizeKoshkoSignalV1,
   normalizeActorReference,
+  type KoshkoProtocolWindowMessageV1,
   type KoshkoSeverity,
   type KoshkoSignalV1,
+  type KoshkoStateMutationV1,
   type ActorReference,
 } from '@koshko/protocol';
 
@@ -25,6 +30,27 @@ export interface ActorEmitter {
   readonly producerId: string;
   event(name: string, details?: unknown, options?: EmitOptions): KoshkoSignalV1;
   to(target: ActorReference | string, name: string, details?: unknown, options?: EmitOptions): KoshkoSignalV1;
+}
+
+export interface StateEmitterOptions {
+  producerId?: string;
+}
+
+export interface StateMutationOptions {
+  occurredAt?: number;
+}
+
+export type StatePatchOperationInput =
+  | { op: 'add'; path: string; value: unknown }
+  | { op: 'remove'; path: string }
+  | { op: 'replace'; path: string; value: unknown };
+
+export interface StateEmitter {
+  readonly producerId: string;
+  mutate(
+    patch: readonly StatePatchOperationInput[],
+    options?: StateMutationOptions,
+  ): KoshkoStateMutationV1;
 }
 
 const CHANNEL = 'koshko';
@@ -55,7 +81,7 @@ export function createActorEmitter(options: ActorEmitterOptions): ActorEmitter {
       tags: emitOptions?.tags,
     });
 
-    postWindowMessage(signal);
+    postWindowMessage(createKoshkoWindowMessageV1(signal));
     return signal;
   }
 
@@ -71,18 +97,59 @@ export function createActorEmitter(options: ActorEmitterOptions): ActorEmitter {
   };
 }
 
+export function createStateEmitter(options: StateEmitterOptions = {}): StateEmitter {
+  const producerId = normalizeProducerId(options.producerId ?? createDefaultStateProducerId());
+  let producerSequence = 0;
+
+  return {
+    producerId,
+    mutate(patch, mutationOptions) {
+      producerSequence += 1;
+      const occurredAt = getStateMutationOccurredAt(mutationOptions);
+      const input = {
+        protocol: CHANNEL,
+        version: 1,
+        id: createMutationId(producerId, producerSequence, occurredAt),
+        producerId,
+        producerSequence,
+        occurredAt,
+        patch,
+      };
+      let mutation: KoshkoStateMutationV1;
+      try {
+        mutation = normalizeKoshkoStateMutationV1(input);
+      } catch {
+        mutation = normalizeKoshkoStateMutationV1({ ...input, patch: [] });
+      }
+
+      if (isKoshkoStateMutationV1(mutation)) {
+        postWindowMessage(createKoshkoStateMutationWindowMessageV1(mutation));
+      }
+      return mutation;
+    },
+  };
+}
+
+function getStateMutationOccurredAt(options: StateMutationOptions | undefined): number {
+  try {
+    return typeof options?.occurredAt === 'number' ? options.occurredAt : now();
+  } catch {
+    return now();
+  }
+}
+
 function normalizeTarget(target: ActorReference | string): ActorReference {
   return typeof target === 'string' ? normalizeActorReference({ id: target }) : normalizeActorReference(target);
 }
 
-function postWindowMessage(signal: KoshkoSignalV1): void {
+function postWindowMessage(message: KoshkoProtocolWindowMessageV1): void {
   try {
     const currentWindow = globalThis.window;
     if (!currentWindow || typeof currentWindow.postMessage !== 'function') {
       return;
     }
 
-    currentWindow.postMessage(createKoshkoWindowMessageV1(signal), '*');
+    currentWindow.postMessage(message, '*');
   } catch {
     // Safe failure: the emitter must never throw into application code.
   }
@@ -97,8 +164,17 @@ function createDefaultProducerId(sourceId: string): string {
   return `producer:${sanitizeIdentifier(seed)}`;
 }
 
+function createDefaultStateProducerId(): string {
+  const seed = `${now()}:${Math.random().toString(36).slice(2, 8)}`;
+  return `state:${sanitizeIdentifier(seed)}`;
+}
+
 function createSignalId(producerId: string, sequence: number, occurredAt: number): string {
   return sanitizeIdentifier(`${producerId}:${sequence}:${Math.trunc(occurredAt)}`);
+}
+
+function createMutationId(producerId: string, sequence: number, occurredAt: number): string {
+  return sanitizeIdentifier(`state-mutation:${producerId}:${sequence}:${Math.trunc(occurredAt)}`);
 }
 
 function sanitizeIdentifier(value: string): string {

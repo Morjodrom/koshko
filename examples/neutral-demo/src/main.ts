@@ -1,4 +1,4 @@
-import { createActorEmitter } from '@koshko/emitter';
+import { createActorEmitter, createStateEmitter } from '@koshko/emitter';
 import type { KoshkoSignalV1 } from '@koshko/protocol';
 import {
   DEMO_ACTORS,
@@ -10,6 +10,7 @@ import {
 const userEmitter = createActorEmitter(DEMO_ACTORS.user);
 const hostEmitter = createActorEmitter(DEMO_ACTORS.host);
 const sdkEmitter = createActorEmitter(DEMO_ACTORS.sdk);
+const stateEmitter = createStateEmitter({ producerId: 'neutral-demo-state' });
 const log = document.querySelector<HTMLElement>('#log')!;
 const status = document.querySelector<HTMLElement>('#status')!;
 const frames = new Map<FrameCommand['instance'], HTMLIFrameElement>([
@@ -21,6 +22,7 @@ const events: string[] = [];
 renderStatus('Ready. Choose a repeatable scenario. Each run receives a new correlation ID.');
 wireWindow();
 wireScenarioButtons();
+wireStateMutationButtons();
 renderLog();
 
 function wireScenarioButtons(): void {
@@ -30,6 +32,27 @@ function wireScenarioButtons(): void {
       runScenario(scenario);
     });
   }
+}
+
+function wireStateMutationButtons(): void {
+  document.querySelector<HTMLButtonElement>('[data-state-mutation="add"]')?.addEventListener('click', () => {
+    stateEmitter.mutate([
+      { op: 'add', path: '/demo', value: { message: 'Added from the neutral demo', count: 1 } },
+    ]);
+    renderStatus('Added a global state object.');
+  });
+  document.querySelector<HTMLButtonElement>('[data-state-mutation="replace"]')?.addEventListener('click', () => {
+    stateEmitter.mutate([
+      { op: 'replace', path: '/demo/count', value: 2 },
+    ]);
+    renderStatus('Replaced the global state count. Add state first.');
+  });
+  document.querySelector<HTMLButtonElement>('[data-state-mutation="remove"]')?.addEventListener('click', () => {
+    stateEmitter.mutate([
+      { op: 'remove', path: '/demo/message' },
+    ]);
+    renderStatus('Removed the global state message. Add state first.');
+  });
 }
 
 function runScenario(scenario: DemoScenarioName): void {

@@ -1,5 +1,14 @@
 import { describe, expect, it } from 'vitest';
-import { koshkoSignalV1JsonSchema, isKoshkoSignalV1, isKoshkoWindowMessageV1, parseKoshkoWindowMessageV1 } from './index';
+import {
+  isKoshkoProtocolWindowMessageV1,
+  isKoshkoSignalV1,
+  isKoshkoStateMutationV1,
+  isKoshkoWindowMessageV1,
+  koshkoSignalV1JsonSchema,
+  koshkoStateMutationV1JsonSchema,
+  parseKoshkoProtocolWindowMessageV1,
+  parseKoshkoWindowMessageV1,
+} from './index';
 
 describe('protocol validation', () => {
   it('accepts supported signal versions and rejects unsupported messages', () => {
@@ -38,5 +47,115 @@ describe('protocol validation', () => {
         version: { const: 1 },
       },
     });
+    expect(koshkoStateMutationV1JsonSchema).toMatchObject({
+      title: 'KoshkoStateMutationV1',
+      properties: {
+        protocol: { const: 'koshko' },
+        version: { const: 1 },
+        patch: { type: 'array' },
+      },
+    });
+  });
+
+  it('parses state mutations as a separate discriminated message', () => {
+    const mutation = {
+      protocol: 'koshko',
+      version: 1,
+      id: 'mutation-1',
+      producerId: 'state-demo',
+      producerSequence: 1,
+      occurredAt: 10,
+      patch: [
+        { op: 'add', path: '/cart', value: { total: 42, token: 'secret' } },
+      ],
+    };
+    const message = {
+      protocol: 'koshko',
+      version: 1,
+      type: 'state-mutation',
+      mutation,
+    };
+
+    expect(isKoshkoStateMutationV1(mutation)).toBe(true);
+    expect(isKoshkoProtocolWindowMessageV1(message)).toBe(true);
+    expect(isKoshkoWindowMessageV1(message)).toBe(false);
+
+    const parsed = parseKoshkoProtocolWindowMessageV1(message);
+    expect(parsed?.type).toBe('state-mutation');
+    if (parsed?.type === 'state-mutation') {
+      expect(parsed.mutation.patch[0]).toEqual({
+        op: 'add',
+        path: '/cart',
+        value: { total: 42, token: '[Redacted]' },
+      });
+    }
+  });
+
+  it('rejects malformed state patches and unsupported message kinds', () => {
+    const base = {
+      protocol: 'koshko',
+      version: 1,
+      id: 'mutation-1',
+      producerId: 'state-demo',
+      producerSequence: 1,
+      occurredAt: 10,
+    };
+
+    expect(isKoshkoStateMutationV1({
+      ...base,
+      patch: [{ op: 'add', path: '', value: true }],
+    })).toBe(false);
+    expect(isKoshkoStateMutationV1({
+      ...base,
+      patch: [{ op: 'replace', path: '/ready' }],
+    })).toBe(false);
+    expect(isKoshkoStateMutationV1({
+      ...base,
+      patch: [{ op: 'move', path: '/ready', value: true }],
+    })).toBe(false);
+    expect(parseKoshkoProtocolWindowMessageV1({
+      protocol: 'koshko',
+      version: 1,
+      type: 'snapshot',
+    })).toBeUndefined();
+  });
+
+  it('rejects oversized normalized state mutations without invoking getters', () => {
+    const oversizedMutation = {
+      protocol: 'koshko',
+      version: 1,
+      id: 'mutation-large',
+      producerId: 'state-demo',
+      producerSequence: 1,
+      occurredAt: 10,
+      patch: Array.from({ length: 5 }, (_, index) => ({
+        op: 'add',
+        path: `/large-${index}`,
+        value: 'x'.repeat(16_000),
+      })),
+    };
+    const message = {
+      protocol: 'koshko',
+      version: 1,
+      type: 'state-mutation',
+      mutation: oversizedMutation,
+    };
+
+    expect(isKoshkoStateMutationV1(oversizedMutation)).toBe(false);
+    expect(parseKoshkoProtocolWindowMessageV1(message)).toBeUndefined();
+
+    let getterInvoked = false;
+    const mutationWithGetter = { ...oversizedMutation };
+    Object.defineProperty(mutationWithGetter, 'patch', {
+      enumerable: true,
+      get() {
+        getterInvoked = true;
+        throw new Error('must not run');
+      },
+    });
+
+    expect(() => isKoshkoStateMutationV1(mutationWithGetter)).not.toThrow();
+    expect(isKoshkoStateMutationV1(mutationWithGetter)).toBe(false);
+    expect(getterInvoked).toBe(false);
   });
 });

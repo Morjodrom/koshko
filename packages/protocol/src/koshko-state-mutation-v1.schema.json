@@ -1,0 +1,106 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://koshko.dev/schemas/koshko-state-mutation-v1.json",
+  "title": "KoshkoStateMutationV1",
+  "type": "object",
+  "additionalProperties": true,
+  "required": [
+    "protocol",
+    "version",
+    "id",
+    "producerId",
+    "producerSequence",
+    "occurredAt",
+    "patch"
+  ],
+  "properties": {
+    "protocol": {
+      "const": "koshko"
+    },
+    "version": {
+      "const": 1
+    },
+    "id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "producerId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "producerSequence": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "occurredAt": {
+      "type": "number"
+    },
+    "patch": {
+      "type": "array",
+      "maxItems": 500,
+      "items": {
+        "oneOf": [
+          { "$ref": "#/$defs/addOperation" },
+          { "$ref": "#/$defs/removeOperation" },
+          { "$ref": "#/$defs/replaceOperation" }
+        ]
+      }
+    }
+  },
+  "$defs": {
+    "path": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 16384,
+      "pattern": "^/(?:[^~]|~[01])*$"
+    },
+    "addOperation": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["op", "path", "value"],
+      "properties": {
+        "op": { "const": "add" },
+        "path": { "$ref": "#/$defs/path" },
+        "value": { "$ref": "#/$defs/jsonValue" }
+      }
+    },
+    "removeOperation": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["op", "path"],
+      "properties": {
+        "op": { "const": "remove" },
+        "path": { "$ref": "#/$defs/path" }
+      }
+    },
+    "replaceOperation": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["op", "path", "value"],
+      "properties": {
+        "op": { "const": "replace" },
+        "path": { "$ref": "#/$defs/path" },
+        "value": { "$ref": "#/$defs/jsonValue" }
+      }
+    },
+    "jsonValue": {
+      "anyOf": [
+        { "type": "string" },
+        { "type": "number" },
+        { "type": "integer" },
+        { "type": "boolean" },
+        { "type": "null" },
+        {
+          "type": "array",
+          "items": { "$ref": "#/$defs/jsonValue" }
+        },
+        {
+          "type": "object",
+          "additionalProperties": { "$ref": "#/$defs/jsonValue" }
+        }
+      ]
+    }
+  }
+}

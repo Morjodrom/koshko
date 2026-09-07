@@ -1,4 +1,11 @@
-import { compareCapturedSignals, type ActorReference, type CapturedSignalV1 } from '@koshko/protocol';
+import {
+  applyStateMutationPatch,
+  compareCapturedSignals,
+  type ActorReference,
+  type CapturedSignalV1,
+  type CapturedStateMutationV1,
+  type JsonObject,
+} from '@koshko/protocol';
 
 export interface KoshkoTimelineActor {
   key: string;
@@ -16,6 +23,10 @@ export class KoshkoRepository {
 
   private displaySignals: CapturedSignalV1[] = [];
 
+  private state: JsonObject = {};
+
+  private displayState: JsonObject = {};
+
   private unreadCount = 0;
 
   private topFrameIdentity: string | undefined;
@@ -26,6 +37,18 @@ export class KoshkoRepository {
 
   getDisplaySignals(): CapturedSignalV1[] {
     return [...this.displaySignals];
+  }
+
+  getState(): JsonObject {
+    return this.state;
+  }
+
+  getCurrentState(): JsonObject {
+    return this.state;
+  }
+
+  getDisplayState(): JsonObject {
+    return this.displayState;
   }
 
   getUnreadCount(): number {
@@ -55,13 +78,15 @@ export class KoshkoRepository {
   clear(): void {
     this.capturedSignals.length = 0;
     this.displaySignals = [];
+    this.state = {};
+    this.displayState = {};
     this.unreadCount = 0;
     this.topFrameIdentity = undefined;
     this.bumpDisplayVersion();
     this.notify();
   }
 
-  record(captured: CapturedSignalV1): boolean {
+  record(captured: CapturedSignalV1 | CapturedStateMutationV1): boolean {
     const identity = this.getDocumentIdentity(captured);
     if (captured.frameId === 0 && identity !== undefined) {
       if (this.topFrameIdentity !== undefined && this.topFrameIdentity !== identity) {
@@ -70,7 +95,11 @@ export class KoshkoRepository {
       this.topFrameIdentity = identity;
     }
 
-    this.capturedSignals.push(captured);
+    if (isCapturedSignal(captured)) {
+      this.capturedSignals.push(captured);
+    } else {
+      this.state = applyStateMutationPatch(this.state, captured.mutation.patch);
+    }
     if (this.paused) {
       this.unreadCount += 1;
       return true;
@@ -121,12 +150,15 @@ export class KoshkoRepository {
       .join('\n');
   }
 
-  private getDocumentIdentity(captured: CapturedSignalV1): string | undefined {
+  private getDocumentIdentity(
+    captured: CapturedSignalV1 | CapturedStateMutationV1,
+  ): string | undefined {
     return captured.documentId ?? captured.navigationId;
   }
 
   private syncDisplaySnapshot(): void {
     this.displaySignals = this.getSignals();
+    this.displayState = this.state;
     this.bumpDisplayVersion();
   }
 
@@ -139,6 +171,12 @@ export class KoshkoRepository {
       listener();
     }
   }
+}
+
+function isCapturedSignal(
+  captured: CapturedSignalV1 | CapturedStateMutationV1,
+): captured is CapturedSignalV1 {
+  return 'signal' in captured;
 }
 
 export function actorKey(reference: ActorReference): string {

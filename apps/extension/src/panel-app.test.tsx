@@ -6,7 +6,7 @@ import {
   screen,
   within,
 } from '@testing-library/react';
-import type { CapturedSignalV1 } from '@koshko/protocol';
+import type { CapturedSignalV1, CapturedStateMutationV1 } from '@koshko/protocol';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { PanelApp, type PanelMessagePort } from './panel-app';
 import { formatTime, KoshkoRepository } from './repository';
@@ -18,7 +18,7 @@ import {
 
 class FakePanelPort implements PanelMessagePort {
   private readonly messageListeners = new Set<
-    (message: { type: string; captured?: unknown }) => void
+    (message: { type: string; kind?: string; captured?: unknown }) => void
   >();
   private readonly disconnectListeners = new Set<() => void>();
 
@@ -26,12 +26,12 @@ class FakePanelPort implements PanelMessagePort {
 
   readonly onMessage = {
     addListener: (
-      listener: (message: { type: string; captured?: unknown }) => void,
+      listener: (message: { type: string; kind?: string; captured?: unknown }) => void,
     ): void => {
       this.messageListeners.add(listener);
     },
     removeListener: (
-      listener: (message: { type: string; captured?: unknown }) => void,
+      listener: (message: { type: string; kind?: string; captured?: unknown }) => void,
     ): void => {
       this.messageListeners.delete(listener);
     },
@@ -52,7 +52,13 @@ class FakePanelPort implements PanelMessagePort {
 
   emitCapture(captured: CapturedSignalV1): void {
     for (const listener of this.messageListeners) {
-      listener({ type: PANEL_MESSAGE_CAPTURE, captured });
+      listener({ type: PANEL_MESSAGE_CAPTURE, kind: 'signal', captured });
+    }
+  }
+
+  emitStateMutation(captured: CapturedStateMutationV1): void {
+    for (const listener of this.messageListeners) {
+      listener({ type: PANEL_MESSAGE_CAPTURE, kind: 'state-mutation', captured });
     }
   }
 
@@ -65,6 +71,30 @@ class FakePanelPort implements PanelMessagePort {
   get listenerCount(): number {
     return this.messageListeners.size + this.disconnectListeners.size;
   }
+}
+
+function capturedStateMutation(
+  patch: CapturedStateMutationV1['mutation']['patch'],
+  overrides: Partial<CapturedStateMutationV1> = {},
+): CapturedStateMutationV1 {
+  return {
+    mutation: {
+      protocol: 'koshko',
+      version: 1,
+      id: 'mutation-1',
+      producerId: 'test-state-producer',
+      producerSequence: 1,
+      occurredAt: Date.parse('2026-09-05T12:34:56.789Z'),
+      patch,
+    },
+    observedAt: Date.parse('2026-09-05T12:34:56.790Z'),
+    tabId: 17,
+    frameId: 0,
+    navigationId: 'navigation-1',
+    frameUrl: 'https://demo.example.test',
+    frameOrigin: 'https://demo.example.test',
+    ...overrides,
+  };
 }
 
 function captured(overrides: Partial<CapturedSignalV1> = {}): CapturedSignalV1 {
@@ -119,6 +149,8 @@ describe('PanelApp', () => {
     expect(screen.getByTestId('empty-state').textContent).toContain(
       'No signals yet.',
     );
+    fireEvent.click(screen.getByRole('button', { name: 'Global State' }));
+    expect(screen.getByTestId('global-state').textContent).toBe('{}');
 
     act(() => port.disconnect());
 
@@ -396,6 +428,70 @@ describe('PanelApp', () => {
     expect(repository.getCount()).toBe(0);
     expect(screen.getByTestId('empty-state')).toBeTruthy();
     expect(port.messages).toContainEqual({ type: PANEL_MESSAGE_CLEAR });
+  });
+
+  it('renders global state mutations without adding them to timeline, log, or export', () => {
+    const { port, repository, downloadJsonl } = mountPanel();
+
+    act(() =>
+      port.emitStateMutation(
+        capturedStateMutation([
+          { op: 'add', path: '/checkout', value: { total: 100, currency: 'RUB' } },
+        ]),
+      ),
+    );
+
+    expect(screen.getByTestId('capture-status').textContent).toContain('0 events captured');
+    expect(document.querySelectorAll('[data-signal-name]').length).toBe(0);
+    fireEvent.click(screen.getByRole('button', { name: 'Log' }));
+    expect(screen.getByTestId('empty-state').textContent).toContain('No signals yet.');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Global State' }));
+    expect(screen.getByTestId('global-state').textContent).toBe(
+      JSON.stringify({ checkout: { total: 100, currency: 'RUB' } }, null, 2),
+    );
+    expect(screen.getByRole('button', { name: 'Global State' }).getAttribute('aria-pressed')).toBe('true');
+
+    fireEvent.click(screen.getByTestId('export-button'));
+    expect(downloadJsonl).toHaveBeenCalledWith(expect.not.stringContaining('checkout'));
+    expect(repository.getState()).toEqual({ checkout: { total: 100, currency: 'RUB' } });
+  });
+
+  it('buffers state while paused and preserves the prior state for an invalid patch', () => {
+    const { port, repository } = mountPanel();
+    act(() =>
+      port.emitStateMutation(
+        capturedStateMutation([{ op: 'add', path: '/ready', value: true }]),
+      ),
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Global State' }));
+    expect(screen.getByTestId('global-state').textContent).toBe('{\n  "ready": true\n}');
+
+    fireEvent.click(screen.getByTestId('pause-button'));
+    act(() =>
+      port.emitStateMutation(
+        capturedStateMutation(
+          [{ op: 'replace', path: '/ready', value: false }],
+          { mutation: { ...capturedStateMutation([]).mutation, id: 'mutation-2', producerSequence: 2, patch: [{ op: 'replace', path: '/ready', value: false }] } },
+        ),
+      ),
+    );
+    expect(screen.getByTestId('global-state').textContent).toBe('{\n  "ready": true\n}');
+    expect(screen.getByTestId('capture-status').textContent).toContain('+1 unread');
+
+    fireEvent.click(screen.getByTestId('pause-button'));
+    expect(screen.getByTestId('global-state').textContent).toBe('{\n  "ready": false\n}');
+
+    act(() =>
+      port.emitStateMutation(
+        capturedStateMutation(
+          [{ op: 'replace', path: '/missing', value: true }],
+          { mutation: { ...capturedStateMutation([]).mutation, id: 'mutation-3', producerSequence: 3, patch: [{ op: 'replace', path: '/missing', value: true }] } },
+        ),
+      ),
+    );
+    expect(repository.getState()).toEqual({ ready: false });
+    expect(screen.getByTestId('global-state').textContent).toBe('{\n  "ready": false\n}');
   });
 
   it('unsubscribes from the port on unmount', () => {

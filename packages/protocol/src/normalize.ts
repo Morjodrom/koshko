@@ -1,10 +1,15 @@
 import type {
   KoshkoSignalV1,
+  KoshkoStateMutationV1,
+  KoshkoStatePatchOperationV1,
+  KoshkoStateMutationWindowMessageV1,
   KoshkoWindowMessageV1,
   ActorReference,
+  CapturedStateMutationV1,
   CapturedSignalV1,
   JsonValue,
 } from './types';
+import { isStateMutationPath } from './state';
 
 const MAX_IDENTIFIER_CODE_POINTS = 128;
 const MAX_TEXT_CODE_POINTS = 16_384;
@@ -121,6 +126,19 @@ export function normalizeKoshkoSignalV1(input: unknown): KoshkoSignalV1 {
   return compactSignal(signal);
 }
 
+export function normalizeKoshkoStateMutationV1(input: unknown): KoshkoStateMutationV1 {
+  const record = isObjectLike(input) ? input : {};
+  return {
+    protocol: 'koshko',
+    version: 1,
+    id: normalizeIdentifier(readOwnDataProperty(record, 'id'), INVALID_VALUE),
+    producerId: normalizeIdentifier(readOwnDataProperty(record, 'producerId'), INVALID_VALUE),
+    producerSequence: normalizePositiveInteger(readOwnDataProperty(record, 'producerSequence'), 1),
+    occurredAt: normalizeTimestamp(readOwnDataProperty(record, 'occurredAt')),
+    patch: normalizeStatePatch(readOwnDataProperty(record, 'patch')),
+  };
+}
+
 export function normalizeCapturedSignalV1(input: unknown): CapturedSignalV1 {
   const record = isObjectLike(input) ? input : {};
   const signal = normalizeKoshkoSignalV1((record as Record<string, unknown>).signal);
@@ -149,6 +167,34 @@ export function normalizeCapturedSignalV1(input: unknown): CapturedSignalV1 {
   return captured;
 }
 
+export function normalizeCapturedStateMutationV1(input: unknown): CapturedStateMutationV1 {
+  const record = isObjectLike(input) ? input : {};
+  const mutation = normalizeKoshkoStateMutationV1(record.mutation);
+  const observedAt = normalizeTimestamp(record.observedAt);
+  const tabId = normalizeFrameNumber(record.tabId);
+  const frameId = normalizeFrameNumber(record.frameId);
+  const navigationId = normalizeIdentifier(record.navigationId, INVALID_VALUE);
+  const frameUrl = normalizeUrlLike(record.frameUrl);
+  const frameOrigin = normalizeFrameOrigin(record.frameOrigin, frameUrl);
+
+  const captured: CapturedStateMutationV1 = {
+    mutation,
+    observedAt,
+    tabId,
+    frameId,
+    navigationId,
+    frameUrl,
+    frameOrigin,
+  };
+
+  const documentId = normalizeOptionalIdentifier(record.documentId);
+  if (documentId !== undefined) {
+    captured.documentId = documentId;
+  }
+
+  return captured;
+}
+
 export function createKoshkoWindowMessageV1(signal: KoshkoSignalV1): KoshkoWindowMessageV1 {
   return {
     protocol: 'koshko',
@@ -158,8 +204,71 @@ export function createKoshkoWindowMessageV1(signal: KoshkoSignalV1): KoshkoWindo
   };
 }
 
+export function createKoshkoStateMutationWindowMessageV1(
+  mutation: KoshkoStateMutationV1,
+): KoshkoStateMutationWindowMessageV1 {
+  return {
+    protocol: 'koshko',
+    version: 1,
+    type: 'state-mutation',
+    mutation,
+  };
+}
+
 export function normalizeJsonValue(input: unknown): JsonValue {
   return normalizeJsonValueInternal(input, 0, new WeakMap<object, string>(), []);
+}
+
+function normalizeStatePatch(input: unknown): KoshkoStatePatchOperationV1[] {
+  if (!Array.isArray(input) || input.length > MAX_ARRAY_LENGTH) {
+    return [];
+  }
+
+  const patch: KoshkoStatePatchOperationV1[] = [];
+  for (let index = 0; index < input.length; index += 1) {
+    const candidate = readOwnDataProperty(input, index);
+    if (!isObjectLike(candidate)) {
+      return [];
+    }
+
+    const op = readOwnDataProperty(candidate, 'op');
+    const path = readOwnDataProperty(candidate, 'path');
+    if (!isStateMutationPath(path)) {
+      return [];
+    }
+
+    if (op === 'remove') {
+      patch.push({ op: 'remove', path });
+      continue;
+    }
+
+    if (
+      (op === 'add' || op === 'replace') &&
+      hasOwnDataProperty(candidate, 'value')
+    ) {
+      patch.push({
+        op,
+        path,
+        value: normalizeStatePatchValue(path, readOwnDataProperty(candidate, 'value')),
+      });
+      continue;
+    }
+
+    return [];
+  }
+  return patch;
+}
+
+function normalizeStatePatchValue(path: string, value: unknown): JsonValue {
+  const segments = path.slice(1).split('/').map((segment) => segment.replace(/~1/g, '/').replace(/~0/g, '~'));
+  if (segments.some(isSensitiveKey)) {
+    return REDACTED;
+  }
+
+  const property = segments.at(-1);
+  return property !== undefined && isUrlKey(property)
+    ? sanitizeUrlValue(value)
+    : normalizeJsonValue(value);
 }
 
 export function compareCapturedSignals(left: CapturedSignalV1, right: CapturedSignalV1): number {
@@ -532,6 +641,26 @@ function isUrlKey(key: string): boolean {
 
 function isObjectLike(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
+}
+
+function readOwnDataProperty(record: object, key: PropertyKey): unknown {
+  try {
+    const descriptor = Object.getOwnPropertyDescriptor(record, key);
+    return descriptor && Object.prototype.hasOwnProperty.call(descriptor, 'value')
+      ? descriptor.value
+      : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function hasOwnDataProperty(record: object, key: PropertyKey): boolean {
+  try {
+    const descriptor = Object.getOwnPropertyDescriptor(record, key);
+    return descriptor !== undefined && Object.prototype.hasOwnProperty.call(descriptor, 'value');
+  } catch {
+    return false;
+  }
 }
 
 function compareNumbers(left: number, right: number): number {

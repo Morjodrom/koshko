@@ -1,4 +1,7 @@
-import { normalizeCapturedSignalV1 } from '@koshko/protocol';
+import {
+  normalizeCapturedSignalV1,
+  normalizeCapturedStateMutationV1,
+} from '@koshko/protocol';
 import {
   PANEL_MESSAGE_CAPTURE,
   PANEL_MESSAGE_SYNC_ORIGINS,
@@ -72,8 +75,7 @@ async function routeCaptureMessage(message: CaptureTransportMessage, sender: chr
     return;
   }
 
-  const captured = normalizeCapturedSignalV1({
-    signal: message.signal,
+  const metadata = {
     observedAt: message.observedAt,
     tabId,
     frameId: sender.frameId ?? -1,
@@ -81,14 +83,25 @@ async function routeCaptureMessage(message: CaptureTransportMessage, sender: chr
     navigationId: message.navigationId,
     frameUrl: message.frameUrl,
     frameOrigin: message.frameOrigin,
-  });
+  };
+
+  const payload: PanelCaptureMessage = message.kind === 'signal'
+    ? {
+      type: PANEL_MESSAGE_CAPTURE,
+      kind: 'signal',
+      captured: normalizeCapturedSignalV1({ signal: message.signal, ...metadata }),
+    }
+    : {
+      type: PANEL_MESSAGE_CAPTURE,
+      kind: 'state-mutation',
+      captured: normalizeCapturedStateMutationV1({ mutation: message.mutation, ...metadata }),
+    };
 
   const ports = panelPorts.get(tabId);
   if (!ports || ports.size === 0) {
     return;
   }
 
-  const payload = { type: PANEL_MESSAGE_CAPTURE, captured } satisfies PanelCaptureMessage;
   for (const port of ports) {
     port.postMessage(payload);
   }

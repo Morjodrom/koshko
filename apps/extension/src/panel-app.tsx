@@ -4,7 +4,11 @@ import {
   type CSSProperties,
   type ReactElement,
 } from 'react';
-import type { CapturedSignalV1 } from '@koshko/protocol';
+import type {
+  CapturedSignalV1,
+  CapturedStateMutationV1,
+  JsonObject,
+} from '@koshko/protocol';
 import {
   PANEL_MESSAGE_CAPTURE,
   PANEL_MESSAGE_CLEAR,
@@ -22,10 +26,10 @@ import {
 export interface PanelMessagePort {
   onMessage: {
     addListener(
-      listener: (message: { type: string; captured?: unknown }) => void,
+      listener: (message: { type: string; kind?: string; captured?: unknown }) => void,
     ): void;
     removeListener?(
-      listener: (message: { type: string; captured?: unknown }) => void,
+      listener: (message: { type: string; kind?: string; captured?: unknown }) => void,
     ): void;
   };
   onDisconnect: {
@@ -48,12 +52,15 @@ export function PanelApp({
   tabId,
   downloadJsonl,
 }: PanelAppProps): ReactElement {
-  const [activeTab, setActiveTab] = useState<'timeline' | 'log'>('timeline');
+  const [activeTab, setActiveTab] = useState<'timeline' | 'log' | 'state'>('timeline');
   const [connected, setConnected] = useState(true);
   const [paused, setPaused] = useState(repository.isPaused);
   const [unreadCount, setUnreadCount] = useState(repository.getUnreadCount());
   const [displaySignals, setDisplaySignals] = useState(
     repository.getDisplaySignals(),
+  );
+  const [displayState, setDisplayState] = useState<JsonObject>(
+    repository.getDisplayState(),
   );
   const [expandedSignalIds, setExpandedSignalIds] = useState<
     ReadonlySet<string>
@@ -65,6 +72,7 @@ export function PanelApp({
       setUnreadCount(repository.getUnreadCount());
       const signals = repository.getDisplaySignals();
       setDisplaySignals(signals);
+      setDisplayState(repository.getDisplayState());
       const displayedIds = new Set(
         signals.map((captured) => captured.signal.id),
       );
@@ -75,9 +83,15 @@ export function PanelApp({
           ),
       );
     };
-    const onMessage = (message: { type: string; captured?: unknown }): void => {
+    const onMessage = (message: { type: string; kind?: string; captured?: unknown }): void => {
       if (message.type !== PANEL_MESSAGE_CAPTURE || !message.captured) return;
-      repository.record(message.captured as CapturedSignalV1);
+      if (message.kind === 'signal') {
+        repository.record(message.captured as CapturedSignalV1);
+      } else if (message.kind === 'state-mutation') {
+        repository.record(message.captured as CapturedStateMutationV1);
+      } else {
+        return;
+      }
       syncFromRepository();
     };
     const onDisconnect = (): void => setConnected(false);
@@ -173,6 +187,13 @@ export function PanelApp({
         >
           Log
         </button>
+        <button
+          className={activeTab === 'state' ? 'tab active' : 'tab'}
+          aria-pressed={activeTab === 'state'}
+          onClick={() => setActiveTab('state')}
+        >
+          Global State
+        </button>
       </nav>
       <section className="card" data-testid="panel-body">
         {activeTab === 'timeline' ? (
@@ -182,11 +203,21 @@ export function PanelApp({
             expandedSignalIds={expandedSignalIds}
             toggleDetails={toggleDetails}
           />
-        ) : (
+        ) : activeTab === 'log' ? (
           <Log signals={signals} />
+        ) : (
+          <GlobalState state={displayState} />
         )}
       </section>
     </main>
+  );
+}
+
+function GlobalState({ state }: { state: JsonObject }): ReactElement {
+  return (
+    <pre className="global-state" data-testid="global-state" aria-label="Global state">
+      {JSON.stringify(state, null, 2)}
+    </pre>
   );
 }
 
