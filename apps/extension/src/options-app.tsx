@@ -2,6 +2,7 @@ import { useEffect, useState, type FormEvent, type ReactElement } from 'react';
 import { PANEL_MESSAGE_SYNC_ORIGINS, STORAGE_KEY } from './shared';
 import { getStoredOrigins } from './registry';
 import { normalizeOrigin, originToMatchPattern } from './origins';
+import { BrandLockup, Icon } from './brand';
 
 export function OptionsApp(): ReactElement {
   const [origins, setOrigins] = useState<string[]>([]);
@@ -59,7 +60,7 @@ export function OptionsApp(): ReactElement {
   return (
     <main className="shell">
       <header className="hero">
-        <p className="eyebrow">Koshko Dev Tools</p>
+        <BrandLockup />
         <h1>Origin access</h1>
         <p className="muted">
           Grant one origin at a time, then reload the page you want to inspect.
@@ -80,6 +81,7 @@ export function OptionsApp(): ReactElement {
         </label>
         <div className="actions">
           <button type="submit" className="primary">
+            <Icon name="plus" className="button-icon" />
             Grant origin
           </button>
         </div>
@@ -93,7 +95,11 @@ export function OptionsApp(): ReactElement {
         </div>
         <ul id="origin-list" className="list">
           {origins.length === 0 ? (
-            <li className="empty">No origins granted yet.</li>
+            <li className="empty empty-with-icon">
+              <Icon name="activity" className="state-icon" />
+              <p>No origins granted yet.</p>
+              <span>Grant an origin to begin inspecting signals.</span>
+            </li>
           ) : (
             origins.map((origin) => (
               <li className="list-row" key={origin}>
@@ -103,6 +109,7 @@ export function OptionsApp(): ReactElement {
                   className="ghost"
                   onClick={() => void removeOrigin(origin)}
                 >
+                  <Icon name="trash" className="button-icon" />
                   Remove
                 </button>
               </li>

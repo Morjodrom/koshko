@@ -22,6 +22,7 @@ import {
   formatTime,
   type KoshkoTimelineActor,
 } from './repository';
+import { BrandLockup, Icon } from './brand';
 
 export interface PanelMessagePort {
   onMessage: {
@@ -109,8 +110,10 @@ export function PanelApp({
   if (!connected) {
     return (
       <main className="shell" data-testid="disconnected-panel">
-        <section className="card">
-          <h1>Koshko</h1>
+        <section className="card disconnected-state">
+          <BrandLockup />
+          <Icon className="state-icon" name="activity" />
+          <h1>Connection lost</h1>
           <p className="muted">
             The background connection closed. Reopen DevTools or reload the
             page.
@@ -145,8 +148,8 @@ export function PanelApp({
   return (
     <main className="shell">
       <header className="toolbar card">
-        <div>
-          <p className="eyebrow">Koshko Dev Tools</p>
+        <div className="toolbar-copy">
+          <BrandLockup compact />
           <h1>Tab {tabId}</h1>
           <p className="muted" data-testid="capture-status">
             {signals.length} event{signals.length === 1 ? '' : 's'} captured
@@ -159,15 +162,18 @@ export function PanelApp({
             data-testid="pause-button"
             onClick={togglePaused}
           >
+            <Icon name={paused ? 'play' : 'pause'} className="button-icon" />
             {paused ? 'Resume' : 'Pause'}
           </button>
           <button data-testid="clear-button" onClick={clear}>
+            <Icon name="trash" className="button-icon" />
             Clear
           </button>
           <button
             data-testid="export-button"
             onClick={() => downloadJsonl(repository.exportJsonl())}
           >
+            <Icon name="download" className="button-icon" />
             Export JSONL
           </button>
         </div>
@@ -178,6 +184,7 @@ export function PanelApp({
           aria-pressed={activeTab === 'timeline'}
           onClick={() => setActiveTab('timeline')}
         >
+          <Icon name="timeline" className="tab-icon" />
           Timeline
         </button>
         <button
@@ -185,6 +192,7 @@ export function PanelApp({
           aria-pressed={activeTab === 'log'}
           onClick={() => setActiveTab('log')}
         >
+          <Icon name="activity" className="tab-icon" />
           Log
         </button>
         <button
@@ -192,6 +200,7 @@ export function PanelApp({
           aria-pressed={activeTab === 'state'}
           onClick={() => setActiveTab('state')}
         >
+          <Icon name="activity" className="tab-icon" />
           Global State
         </button>
       </nav>
@@ -234,9 +243,11 @@ function Timeline({
 }): ReactElement {
   if (signals.length === 0)
     return (
-      <p className="empty" data-testid="empty-state">
-        No signals yet.
-      </p>
+      <div className="empty empty-with-icon" data-testid="empty-state">
+        <Icon name="timeline" className="state-icon" />
+        <p>No signals yet.</p>
+        <span>Signals from this tab will appear here.</span>
+      </div>
     );
   return (
     <div
@@ -419,9 +430,11 @@ function TimelineRow({
 function Log({ signals }: { signals: CapturedSignalV1[] }): ReactElement {
   if (signals.length === 0)
     return (
-      <p className="empty" data-testid="empty-state">
-        No signals yet.
-      </p>
+      <div className="empty empty-with-icon" data-testid="empty-state">
+        <Icon name="activity" className="state-icon" />
+        <p>No signals yet.</p>
+        <span>Open an event in the timeline to inspect its details.</span>
+      </div>
     );
   return (
     <div className="log" data-testid="log">

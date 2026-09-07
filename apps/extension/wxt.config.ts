@@ -8,5 +8,11 @@ export default defineConfig({
     description: 'Disposable Chrome DevTools prototype for koshko signals.',
     permissions: ['scripting', 'storage'],
     optional_host_permissions: ['http://*/*', 'https://*/*'],
+    icons: {
+      16: 'icons/icon-16.png',
+      32: 'icons/icon-32.png',
+      48: 'icons/icon-48.png',
+      128: 'icons/icon-128.png',
+    },
   },
 });
