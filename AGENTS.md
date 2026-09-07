@@ -22,6 +22,14 @@ Run commands from the repository root:
 
 For a focused check, use `npm test --workspace=@koshko/protocol`.
 
+## Versioning
+
+The canonical Koshko Dev Tools version is the `version` field in
+`apps/extension/package.json`; WXT exposes it in the extension manifest. Before
+every commit, increment this version, including commits that only change tests,
+documentation, or project metadata, and keep `package-lock.json` synchronized.
+Use semantic versioning when choosing the next version.
+
 ## Coding Style & Naming Conventions
 
 Use ES modules and strict TypeScript. Follow the existing style: two-space indentation, single quotes, semicolons, trailing commas in multiline structures, and explicit return types on exported APIs. Use `PascalCase` for classes, interfaces, and types; `camelCase` for functions and variables; and uppercase constants such as `CHANNEL`. Validate untrusted window-message data before use. No formatter or linter is configured, so match nearby code and run type checking.

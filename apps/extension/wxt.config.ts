@@ -1,10 +1,12 @@
 import { defineConfig } from 'wxt';
+import extensionPackage from './package.json';
 
 export default defineConfig({
   modules: ['@wxt-dev/module-react'],
   outDir: '.output/chrome-mv3-dev',
   manifest: {
     name: 'Koshko Dev Tools',
+    version: extensionPackage.version,
     description: 'Disposable Chrome DevTools prototype for koshko signals.',
     permissions: ['activeTab', 'scripting', 'storage'],
     optional_host_permissions: ['http://*/*', 'https://*/*'],
