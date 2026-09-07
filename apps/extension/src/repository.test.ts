@@ -202,4 +202,57 @@ describe('koshko dev tools repository', () => {
 
     expect(repo.getState()).toEqual({ value: 1 });
   });
+
+  it('retains a deterministic combined log snapshot, including invalid mutations, across pause and navigation', () => {
+    const repo = new KoshkoRepository();
+    const base = {
+      observedAt: 10,
+      tabId: 1,
+      frameId: 0,
+      navigationId: 'nav-a',
+      frameUrl: 'https://example.com',
+      frameOrigin: 'https://example.com',
+    };
+
+    repo.record({
+      ...base,
+      mutation: {
+        protocol: 'koshko', version: 1, id: 'state-1', producerId: 'state', producerSequence: 1, occurredAt: 20,
+        patch: [{ op: 'add', path: '/value', value: 1 }],
+      },
+    });
+    repo.record({
+      ...base,
+      signal: {
+        protocol: 'koshko', version: 1, id: 'signal-1', producerId: 'signal', producerSequence: 1, occurredAt: 10,
+        source: { id: 'host' }, name: 'host.ready',
+      },
+    });
+    repo.setPaused(true);
+    repo.record({
+      ...base,
+      observedAt: 30,
+      mutation: {
+        protocol: 'koshko', version: 1, id: 'state-invalid', producerId: 'state', producerSequence: 2, occurredAt: 30,
+        patch: [{ op: 'replace', path: '/missing', value: true }],
+      },
+    });
+
+    expect(repo.getDisplayLog().map((entry) => ('signal' in entry ? entry.signal.id : entry.mutation.id))).toEqual(['signal-1', 'state-1']);
+    expect(repo.getLog().map((entry) => ('signal' in entry ? entry.signal.id : entry.mutation.id))).toEqual(['signal-1', 'state-1', 'state-invalid']);
+    expect(repo.getState()).toEqual({ value: 1 });
+
+    repo.setPaused(false);
+    expect(repo.getDisplayLog().map((entry) => ('signal' in entry ? entry.signal.id : entry.mutation.id))).toEqual(['signal-1', 'state-1', 'state-invalid']);
+
+    repo.record({
+      ...base,
+      navigationId: 'nav-b',
+      signal: {
+        protocol: 'koshko', version: 1, id: 'signal-next', producerId: 'signal', producerSequence: 2, occurredAt: 1,
+        source: { id: 'host' }, name: 'host.next',
+      },
+    });
+    expect(repo.getDisplayLog().map((entry) => ('signal' in entry ? entry.signal.id : entry.mutation.id))).toEqual(['signal-next']);
+  });
 });

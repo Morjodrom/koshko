@@ -1,5 +1,6 @@
 import {
   useLayoutEffect,
+  useRef,
   useState,
   type CSSProperties,
   type ReactElement,
@@ -20,6 +21,7 @@ import {
   formatActor,
   formatDateTime,
   formatTime,
+  type KoshkoLogEntry,
   type KoshkoTimelineActor,
 } from './repository';
 import { BrandLockup, Icon } from './brand';
@@ -63,9 +65,22 @@ export function PanelApp({
   const [displayState, setDisplayState] = useState<JsonObject>(
     repository.getDisplayState(),
   );
+  const [displayLog, setDisplayLog] = useState<KoshkoLogEntry[]>(
+    repository.getDisplayLog(),
+  );
+  const [logQuery, setLogQuery] = useState('');
+  const [selectedActorKeys, setSelectedActorKeys] = useState<ReadonlySet<string>>(
+    () => new Set(getLogActors(repository.getDisplayLog()).map((actor) => actor.key)),
+  );
+  const [selectedLogTypes, setSelectedLogTypes] = useState<ReadonlySet<LogEntryType>>(
+    new Set(['signal']),
+  );
   const [expandedSignalIds, setExpandedSignalIds] = useState<
     ReadonlySet<string>
   >(new Set());
+  const knownActorKeys = useRef(
+    new Set(getLogActors(repository.getDisplayLog()).map((actor) => actor.key)),
+  );
 
   useLayoutEffect(() => {
     const syncFromRepository = (): void => {
@@ -73,7 +88,19 @@ export function PanelApp({
       setUnreadCount(repository.getUnreadCount());
       const signals = repository.getDisplaySignals();
       setDisplaySignals(signals);
+      const log = repository.getDisplayLog();
+      setDisplayLog(log);
       setDisplayState(repository.getDisplayState());
+      const discoveredActorKeys = getLogActors(log).map((actor) => actor.key);
+      const newActorKeys = discoveredActorKeys.filter(
+        (key) => !knownActorKeys.current.has(key),
+      );
+      if (newActorKeys.length > 0) {
+        newActorKeys.forEach((key) => knownActorKeys.current.add(key));
+        setSelectedActorKeys(
+          (previous) => new Set([...previous, ...newActorKeys]),
+        );
+      }
       const displayedIds = new Set(
         signals.map((captured) => captured.signal.id),
       );
@@ -144,6 +171,19 @@ export function PanelApp({
   };
   const actors = repository.getActorColumns();
   const signals = displaySignals;
+  const logActors = getLogActors(displayLog);
+  const actorFilterActive = logActors.some(
+    (actor) => !selectedActorKeys.has(actor.key),
+  );
+  const filteredLog = displayLog.filter((entry) => {
+    const type = getLogEntryType(entry);
+    if (!selectedLogTypes.has(type)) return false;
+    if (logQuery && !JSON.stringify(entry).toLowerCase().includes(logQuery.toLowerCase())) {
+      return false;
+    }
+    if (!actorFilterActive) return true;
+    return isCapturedSignalEntry(entry) && matchesSelectedActor(entry, selectedActorKeys);
+  });
 
   return (
     <main className="shell">
@@ -213,7 +253,29 @@ export function PanelApp({
             toggleDetails={toggleDetails}
           />
         ) : activeTab === 'log' ? (
-          <Log signals={signals} />
+          <Log
+            entries={filteredLog}
+            capturedEntryCount={displayLog.length}
+            query={logQuery}
+            actors={logActors}
+            selectedActorKeys={selectedActorKeys}
+            selectedTypes={selectedLogTypes}
+            onQueryChange={setLogQuery}
+            onActorToggle={(key) => {
+              setSelectedActorKeys((previous) => {
+                const next = new Set(previous);
+                next.has(key) ? next.delete(key) : next.add(key);
+                return next;
+              });
+            }}
+            onTypeToggle={(type) => {
+              setSelectedLogTypes((previous) => {
+                const next = new Set(previous);
+                next.has(type) ? next.delete(type) : next.add(type);
+                return next;
+              });
+            }}
+          />
         ) : (
           <GlobalState state={displayState} />
         )}
@@ -427,33 +489,122 @@ function TimelineRow({
   );
 }
 
-function Log({ signals }: { signals: CapturedSignalV1[] }): ReactElement {
-  if (signals.length === 0)
-    return (
-      <div className="empty empty-with-icon" data-testid="empty-state">
-        <Icon name="activity" className="state-icon" />
-        <p>No signals yet.</p>
-        <span>Open an event in the timeline to inspect its details.</span>
-      </div>
-    );
+type LogEntryType = 'signal' | 'state';
+
+function Log({
+  entries,
+  capturedEntryCount,
+  query,
+  actors,
+  selectedActorKeys,
+  selectedTypes,
+  onQueryChange,
+  onActorToggle,
+  onTypeToggle,
+}: {
+  entries: KoshkoLogEntry[];
+  capturedEntryCount: number;
+  query: string;
+  actors: KoshkoTimelineActor[];
+  selectedActorKeys: ReadonlySet<string>;
+  selectedTypes: ReadonlySet<LogEntryType>;
+  onQueryChange: (query: string) => void;
+  onActorToggle: (key: string) => void;
+  onTypeToggle: (type: LogEntryType) => void;
+}): ReactElement {
+  const emptyMessage = capturedEntryCount === 0
+    ? ['No log entries yet.', 'Captured signals and state mutations will appear here.']
+    : ['No log entries match the current filters.', 'Adjust the search or filters to show captured entries.'];
+
   return (
     <div className="log" data-testid="log">
-      {signals.map((signal, index) => (
+      <div className="log-filters" aria-label="Log filters">
+        <label className="field log-search">
+          Search log
+          <input
+            aria-label="Search log"
+            type="search"
+            value={query}
+            onChange={(event) => onQueryChange(event.target.value)}
+            placeholder="Search captured data"
+          />
+        </label>
+        <fieldset className="log-filter-group">
+          <legend>Entry type</legend>
+          <label><input type="checkbox" checked={selectedTypes.has('signal')} onChange={() => onTypeToggle('signal')} /> Signal</label>
+          <label><input type="checkbox" checked={selectedTypes.has('state')} onChange={() => onTypeToggle('state')} /> State</label>
+        </fieldset>
+        <fieldset className="log-filter-group">
+          <legend>Actors</legend>
+          {actors.length === 0 ? <span className="muted">No signal actors captured.</span> : actors.map((actor) => (
+            <label key={actor.key}>
+              <input
+                type="checkbox"
+                checked={selectedActorKeys.has(actor.key)}
+                onChange={() => onActorToggle(actor.key)}
+              />
+              {formatActor(actor.reference)}
+            </label>
+          ))}
+        </fieldset>
+      </div>
+      {entries.length === 0 ? (
+        <div className="empty empty-with-icon" data-testid="log-empty-state">
+          <Icon name="activity" className="state-icon" />
+          <p>{emptyMessage[0]}</p>
+          <span>{emptyMessage[1]}</span>
+        </div>
+      ) : entries.map((entry, index) => {
+        const isSignal = isCapturedSignalEntry(entry);
+        const metadata = isSignal ? entry.signal : entry.mutation;
+        const type = isSignal ? 'Signal' : 'State';
+        return (
         <details
           className="log-item"
-          open={index === signals.length - 1}
-          data-signal-name={signal.signal.name}
-          key={signal.signal.id}
+          open={index === entries.length - 1}
+          data-log-entry-type={type.toLowerCase()}
+          data-signal-name={isSignal ? entry.signal.name : undefined}
+          key={`${type}-${metadata.id}`}
         >
           <summary>
-            <span className="log-summary-title">{signal.signal.name}</span>
+            <span className="log-summary-title"><span className={`log-entry-kind ${type.toLowerCase()}`}>{type}</span> {isSignal ? entry.signal.name : 'state mutation'}</span>
             <span className="muted">
-              {formatDateTime(signal.signal.occurredAt)}
+              {formatDateTime(metadata.occurredAt)}
             </span>
           </summary>
-          <pre>{JSON.stringify(signal, null, 2)}</pre>
+          <pre>{JSON.stringify(entry, null, 2)}</pre>
         </details>
-      ))}
+        );
+      })}
     </div>
   );
+}
+
+function getLogActors(entries: KoshkoLogEntry[]): KoshkoTimelineActor[] {
+  const actors: KoshkoTimelineActor[] = [];
+  const seen = new Set<string>();
+  for (const entry of entries) {
+    if (!isCapturedSignalEntry(entry)) continue;
+    for (const reference of [entry.signal.source, entry.signal.target]) {
+      if (!reference) continue;
+      const key = actorKey(reference);
+      if (seen.has(key)) continue;
+      seen.add(key);
+      actors.push({ key, reference });
+    }
+  }
+  return actors;
+}
+
+function matchesSelectedActor(entry: CapturedSignalV1, selectedActorKeys: ReadonlySet<string>): boolean {
+  return selectedActorKeys.has(actorKey(entry.signal.source))
+    || (entry.signal.target !== undefined && selectedActorKeys.has(actorKey(entry.signal.target)));
+}
+
+function getLogEntryType(entry: KoshkoLogEntry): LogEntryType {
+  return isCapturedSignalEntry(entry) ? 'signal' : 'state';
+}
+
+function isCapturedSignalEntry(entry: KoshkoLogEntry): entry is CapturedSignalV1 {
+  return 'signal' in entry;
 }

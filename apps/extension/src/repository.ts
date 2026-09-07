@@ -12,8 +12,12 @@ export interface KoshkoTimelineActor {
   reference: ActorReference;
 }
 
+export type KoshkoLogEntry = CapturedSignalV1 | CapturedStateMutationV1;
+
 export class KoshkoRepository {
   private readonly capturedSignals: CapturedSignalV1[] = [];
+
+  private readonly capturedLog: KoshkoLogEntry[] = [];
 
   private paused = false;
 
@@ -22,6 +26,8 @@ export class KoshkoRepository {
   private displayVersion = 0;
 
   private displaySignals: CapturedSignalV1[] = [];
+
+  private displayLog: KoshkoLogEntry[] = [];
 
   private state: JsonObject = {};
 
@@ -37,6 +43,10 @@ export class KoshkoRepository {
 
   getDisplaySignals(): CapturedSignalV1[] {
     return [...this.displaySignals];
+  }
+
+  getDisplayLog(): KoshkoLogEntry[] {
+    return [...this.displayLog];
   }
 
   getState(): JsonObject {
@@ -77,7 +87,9 @@ export class KoshkoRepository {
 
   clear(): void {
     this.capturedSignals.length = 0;
+    this.capturedLog.length = 0;
     this.displaySignals = [];
+    this.displayLog = [];
     this.state = {};
     this.displayState = {};
     this.unreadCount = 0;
@@ -95,6 +107,7 @@ export class KoshkoRepository {
       this.topFrameIdentity = identity;
     }
 
+    this.capturedLog.push(captured);
     if (isCapturedSignal(captured)) {
       this.capturedSignals.push(captured);
     } else {
@@ -111,6 +124,10 @@ export class KoshkoRepository {
 
   getSignals(): CapturedSignalV1[] {
     return [...this.capturedSignals].sort(compareCapturedSignals);
+  }
+
+  getLog(): KoshkoLogEntry[] {
+    return [...this.capturedLog].sort(compareCapturedLogEntries);
   }
 
   getCount(): number {
@@ -158,6 +175,7 @@ export class KoshkoRepository {
 
   private syncDisplaySnapshot(): void {
     this.displaySignals = this.getSignals();
+    this.displayLog = this.getLog();
     this.displayState = this.state;
     this.bumpDisplayVersion();
   }
@@ -171,6 +189,36 @@ export class KoshkoRepository {
       listener();
     }
   }
+}
+
+function compareCapturedLogEntries(left: KoshkoLogEntry, right: KoshkoLogEntry): number {
+  const leftMetadata = getLogEntryMetadata(left);
+  const rightMetadata = getLogEntryMetadata(right);
+  const occurredAt = leftMetadata.occurredAt - rightMetadata.occurredAt;
+  if (occurredAt !== 0) return occurredAt;
+
+  const observedAt = left.observedAt - right.observedAt;
+  if (observedAt !== 0) return observedAt;
+
+  const producer = leftMetadata.producerId.localeCompare(rightMetadata.producerId);
+  if (producer !== 0) return producer;
+
+  const sequence = leftMetadata.producerSequence - rightMetadata.producerSequence;
+  if (sequence !== 0) return sequence;
+
+  const id = leftMetadata.id.localeCompare(rightMetadata.id);
+  if (id !== 0) return id;
+
+  return Number(isCapturedSignal(left)) - Number(isCapturedSignal(right));
+}
+
+function getLogEntryMetadata(entry: KoshkoLogEntry): {
+  id: string;
+  producerId: string;
+  producerSequence: number;
+  occurredAt: number;
+} {
+  return isCapturedSignal(entry) ? entry.signal : entry.mutation;
 }
 
 function isCapturedSignal(

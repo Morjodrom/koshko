@@ -430,7 +430,7 @@ describe('PanelApp', () => {
     expect(port.messages).toContainEqual({ type: PANEL_MESSAGE_CLEAR });
   });
 
-  it('renders global state mutations without adding them to timeline, log, or export', () => {
+  it('renders global state mutations without adding them to timeline or export', () => {
     const { port, repository, downloadJsonl } = mountPanel();
 
     act(() =>
@@ -444,7 +444,7 @@ describe('PanelApp', () => {
     expect(screen.getByTestId('capture-status').textContent).toContain('0 events captured');
     expect(document.querySelectorAll('[data-signal-name]').length).toBe(0);
     fireEvent.click(screen.getByRole('button', { name: 'Log' }));
-    expect(screen.getByTestId('empty-state').textContent).toContain('No signals yet.');
+    expect(screen.getByTestId('log-empty-state').textContent).toContain('No log entries match the current filters.');
 
     fireEvent.click(screen.getByRole('button', { name: 'Global State' }));
     expect(screen.getByTestId('global-state').textContent).toBe(
@@ -455,6 +455,114 @@ describe('PanelApp', () => {
     fireEvent.click(screen.getByTestId('export-button'));
     expect(downloadJsonl).toHaveBeenCalledWith(expect.not.stringContaining('checkout'));
     expect(repository.getState()).toEqual({ checkout: { total: 100, currency: 'RUB' } });
+  });
+
+  it('filters the combined log by substring, actor, and entry type while retaining filters between tabs', () => {
+    const { port } = mountPanel();
+    const widget = { id: 'widget', label: 'Widget', instanceId: 'embedded' };
+
+    act(() => {
+      port.emitCapture(captured({
+        signal: {
+          ...captured().signal,
+          id: 'matched-signal',
+          name: 'host.to-widget',
+          target: widget,
+          details: { marker: 'Needle' },
+        },
+      }));
+      port.emitCapture(captured({
+        signal: {
+          ...captured().signal,
+          id: 'other-signal',
+          producerSequence: 2,
+          source: { id: 'other', label: 'Other' },
+          name: 'other.event',
+        },
+      }));
+      port.emitStateMutation(capturedStateMutation([
+        { op: 'add', path: '/marker', value: 'Needle state' },
+      ]));
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Log' }));
+    expect((screen.getByRole('checkbox', { name: 'Signal' }) as HTMLInputElement).checked).toBe(true);
+    expect((screen.getByRole('checkbox', { name: 'State' }) as HTMLInputElement).checked).toBe(false);
+    expect(document.querySelectorAll('[data-log-entry-type="signal"]')).toHaveLength(2);
+    expect(document.querySelectorAll('[data-log-entry-type="state"]')).toHaveLength(0);
+
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Host application' }));
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Other' }));
+    expect(document.querySelectorAll('[data-log-entry-type="signal"]')).toHaveLength(1);
+    expect(screen.getByTestId('log').textContent).toContain('host.to-widget');
+
+    fireEvent.change(screen.getByRole('searchbox', { name: 'Search log' }), {
+      target: { value: 'nEeDlE' },
+    });
+    expect(screen.getByTestId('log').textContent).toContain('host.to-widget');
+
+    fireEvent.click(screen.getByRole('checkbox', { name: 'State' }));
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Signal' }));
+    expect(screen.getByTestId('log-empty-state').textContent).toContain('current filters');
+
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Host application' }));
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Other' }));
+    expect(document.querySelectorAll('[data-log-entry-type="state"]')).toHaveLength(1);
+    expect(screen.getByTestId('log').textContent).toContain('State');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Timeline' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Log' }));
+    expect((screen.getByRole('searchbox', { name: 'Search log' }) as HTMLInputElement).value).toBe('nEeDlE');
+
+    act(() => port.emitCapture(captured({
+      signal: {
+        ...captured().signal,
+        id: 'fresh-signal',
+        producerSequence: 3,
+        source: { id: 'fresh', label: 'Fresh actor' },
+        name: 'fresh.event',
+      },
+    })));
+    expect((screen.getByRole('checkbox', { name: 'Fresh actor' }) as HTMLInputElement).checked).toBe(true);
+  });
+
+  it('keeps actor filtering active when stale actor selections remain after clear', () => {
+    const { port } = mountPanel();
+
+    act(() => {
+      port.emitCapture(captured());
+      port.emitCapture(captured({
+        signal: {
+          ...captured().signal,
+          id: 'other-signal',
+          producerSequence: 2,
+          source: { id: 'other', label: 'Other' },
+          name: 'other.event',
+        },
+      }));
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Log' }));
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Host application' }));
+    fireEvent.click(screen.getByTestId('clear-button'));
+
+    act(() => {
+      port.emitCapture(captured({
+        signal: {
+          ...captured().signal,
+          id: 'fresh-signal',
+          source: { id: 'fresh', label: 'Fresh actor' },
+          name: 'fresh.event',
+        },
+      }));
+      port.emitStateMutation(capturedStateMutation([
+        { op: 'add', path: '/retained', value: true },
+      ]));
+    });
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Fresh actor' }));
+    fireEvent.click(screen.getByRole('checkbox', { name: 'State' }));
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Signal' }));
+
+    expect(screen.getByTestId('log-empty-state').textContent).toContain('current filters');
   });
 
   it('buffers state while paused and preserves the prior state for an invalid patch', () => {
