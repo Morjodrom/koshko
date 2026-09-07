@@ -4,23 +4,37 @@ import {
 } from '@koshko/protocol';
 import {
   PANEL_MESSAGE_CAPTURE,
+  PANEL_MESSAGE_ACTIVATE_ORIGIN,
+  PANEL_MESSAGE_RECONCILE_PERMISSIONS,
   PANEL_MESSAGE_SYNC_ORIGINS,
   PANEL_PORT_PREFIX,
   type CaptureTransportMessage,
   type BackgroundMessage,
   type PanelCaptureMessage,
 } from './shared';
-import { getStoredOrigins, setStoredOrigins, syncRegisteredContentScripts } from './registry';
-import { normalizeOriginList } from './origins';
+import { handleActionClick, PermissionCoordinator } from './permission-coordinator';
 
 const panelPorts = new Map<number, Set<chrome.runtime.Port>>();
+const permissionCoordinator = new PermissionCoordinator();
 
 chrome.runtime.onInstalled.addListener(() => {
-  void restoreOrigins();
+  void permissionCoordinator.reconcile();
 });
 
 chrome.runtime.onStartup.addListener(() => {
-  void restoreOrigins();
+  void permissionCoordinator.reconcile();
+});
+
+chrome.permissions.onAdded.addListener(() => {
+  void permissionCoordinator.reconcile();
+});
+
+chrome.permissions.onRemoved.addListener(() => {
+  void permissionCoordinator.reconcile();
+});
+
+chrome.action.onClicked.addListener((tab) => {
+  void handleActionClick(tab, permissionCoordinator);
 });
 
 chrome.runtime.onConnect.addListener((port) => {
@@ -47,27 +61,51 @@ chrome.runtime.onConnect.addListener((port) => {
   });
 });
 
-chrome.runtime.onMessage.addListener((message: BackgroundMessage, sender) => {
+chrome.runtime.onMessage.addListener((message: BackgroundMessage, sender, sendResponse) => {
+  if (!message || typeof message !== 'object' || typeof message.type !== 'string') {
+    return;
+  }
+
   if (message.type === PANEL_MESSAGE_CAPTURE) {
     void routeCaptureMessage(message, sender);
     return;
   }
 
   if (message.type === PANEL_MESSAGE_SYNC_ORIGINS) {
-    void replaceOrigins(message.origins);
+    if (Array.isArray(message.origins) && message.origins.every((origin) => typeof origin === 'string')) {
+      void permissionCoordinator.replace(message.origins);
+    }
     return;
   }
+
+  if (message.type === PANEL_MESSAGE_ACTIVATE_ORIGIN) {
+    if (
+      typeof message.origin !== 'string'
+      || (message.tabId != null && (!Number.isInteger(message.tabId) || message.tabId < 0))
+    ) {
+      sendResponse({
+        ok: false,
+        captureStarted: false,
+        error: 'Invalid access activation request.',
+      });
+      return;
+    }
+
+    void permissionCoordinator.activate(message.origin, message.tabId).then(sendResponse);
+    return true;
+  }
+
+  if (message.type === PANEL_MESSAGE_RECONCILE_PERMISSIONS) {
+    void permissionCoordinator.reconcile().then(
+      (origins) => sendResponse({ ok: true, origins }),
+      (error: unknown) => sendResponse({
+        ok: false,
+        error: error instanceof Error ? error.message : 'Could not reconcile site access.',
+      }),
+    );
+    return true;
+  }
 });
-
-async function restoreOrigins(): Promise<void> {
-  const origins = await getStoredOrigins();
-  await syncRegisteredContentScripts(origins);
-}
-
-async function replaceOrigins(origins: string[]): Promise<void> {
-  const normalized = await setStoredOrigins(normalizeOriginList(origins));
-  await syncRegisteredContentScripts(normalized);
-}
 
 async function routeCaptureMessage(message: CaptureTransportMessage, sender: chrome.runtime.MessageSender): Promise<void> {
   const tabId = sender.tab?.id;

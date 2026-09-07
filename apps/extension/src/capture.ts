@@ -4,7 +4,19 @@ import {
   type CaptureTransportMessage,
 } from './shared';
 
+const CAPTURE_STATE = Symbol.for('koshko.capture.v1');
+
+interface CaptureGlobal extends Window {
+  [CAPTURE_STATE]?: { stop: () => void };
+}
+
 export function startCapture(): () => void {
+  const captureGlobal = window as CaptureGlobal;
+  const existing = captureGlobal[CAPTURE_STATE];
+  if (existing) {
+    return existing.stop;
+  }
+
   const navigationId = createNavigationId();
 
   const onMessage = (event: MessageEvent): void => {
@@ -31,7 +43,19 @@ export function startCapture(): () => void {
   };
   window.addEventListener('message', onMessage);
 
-  return () => window.removeEventListener('message', onMessage);
+  let stopped = false;
+  const stop = (): void => {
+    if (stopped) {
+      return;
+    }
+    stopped = true;
+    window.removeEventListener('message', onMessage);
+    if (captureGlobal[CAPTURE_STATE]?.stop === stop) {
+      delete captureGlobal[CAPTURE_STATE];
+    }
+  };
+  captureGlobal[CAPTURE_STATE] = { stop };
+  return stop;
 }
 
 function createNavigationId(): string {

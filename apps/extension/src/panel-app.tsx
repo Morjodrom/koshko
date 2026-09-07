@@ -1,4 +1,5 @@
 import {
+  useEffect,
   useLayoutEffect,
   useRef,
   useState,
@@ -24,6 +25,11 @@ import {
   type KoshkoLogEntry,
   type KoshkoTimelineActor,
 } from './repository';
+import type {
+  InspectedSite,
+  PanelAccessController,
+  PanelAccessSnapshot,
+} from './panel-access';
 import { BrandLockup, Icon } from './brand';
 
 export interface PanelMessagePort {
@@ -46,17 +52,29 @@ export interface PanelAppProps {
   repository: KoshkoRepository;
   port: PanelMessagePort;
   tabId: number;
+  accessController: PanelAccessController;
   downloadJsonl: (jsonl: string) => void;
 }
+
+type AccessState =
+  | { status: 'checking' }
+  | { status: 'unsupported'; message: string }
+  | { status: 'missing'; site: InspectedSite; message?: string }
+  | { status: 'granting'; site: InspectedSite }
+  | { status: 'activating'; site: InspectedSite }
+  | { status: 'active'; site: InspectedSite; justGranted: boolean }
+  | { status: 'activation-error'; site: InspectedSite; message: string };
 
 export function PanelApp({
   repository,
   port,
   tabId,
+  accessController,
   downloadJsonl,
 }: PanelAppProps): ReactElement {
   const [activeTab, setActiveTab] = useState<'timeline' | 'log' | 'state'>('timeline');
   const [connected, setConnected] = useState(true);
+  const [access, setAccess] = useState<AccessState>({ status: 'checking' });
   const [paused, setPaused] = useState(repository.isPaused);
   const [unreadCount, setUnreadCount] = useState(repository.getUnreadCount());
   const [displaySignals, setDisplaySignals] = useState(
@@ -81,6 +99,82 @@ export function PanelApp({
   const knownActorKeys = useRef(
     new Set(getLogActors(repository.getDisplayLog()).map((actor) => actor.key)),
   );
+  const targetRevision = useRef(0);
+  const grantInFlight = useRef(false);
+
+  useEffect(() => {
+    let mounted = true;
+    let revision = 0;
+    const refresh = async (url?: string): Promise<void> => {
+      const currentRevision = ++revision;
+      const snapshot = await accessController.inspect(url);
+      if (!mounted || currentRevision !== revision) {
+        return;
+      }
+      setAccess(accessStateFromSnapshot(snapshot));
+    };
+    const activateNativeGrant = async (origins: string[]): Promise<void> => {
+      const activationRevision = targetRevision.current;
+      const snapshot = await accessController.inspect();
+      if (!mounted || activationRevision !== targetRevision.current) {
+        return;
+      }
+      if (!snapshot.supported || !snapshot.granted) {
+        setAccess(accessStateFromSnapshot(snapshot));
+        return;
+      }
+      if (!origins.includes(snapshot.site.matchPattern)) {
+        setAccess(accessStateFromSnapshot(snapshot));
+        return;
+      }
+
+      grantInFlight.current = true;
+      setAccess({ status: 'activating', site: snapshot.site });
+      const result = await accessController.activate(snapshot.site);
+      if (!mounted || activationRevision !== targetRevision.current) {
+        return;
+      }
+      grantInFlight.current = false;
+      if (!result.granted || !result.captureStarted) {
+        setAccess({
+          status: 'activation-error',
+          site: snapshot.site,
+          message: result.message
+            ?? 'Access was granted, but capture could not start in this page.',
+        });
+        return;
+      }
+      setAccess({ status: 'active', site: snapshot.site, justGranted: true });
+    };
+    const unsubscribe = accessController.subscribe((change) => {
+      if (!mounted) {
+        return;
+      }
+      if (change.kind === 'permission-added') {
+        if (!grantInFlight.current) {
+          setAccess({ status: 'checking' });
+          void activateNativeGrant(change.origins);
+        }
+        return;
+      }
+      if (change.kind === 'navigation') {
+        targetRevision.current += 1;
+        grantInFlight.current = false;
+        setAccess({ status: 'checking' });
+        void refresh(change.url);
+        return;
+      }
+      grantInFlight.current = false;
+      setAccess({ status: 'checking' });
+      void refresh();
+    });
+    void refresh();
+
+    return () => {
+      mounted = false;
+      unsubscribe();
+    };
+  }, [accessController]);
 
   useLayoutEffect(() => {
     const syncFromRepository = (): void => {
@@ -157,6 +251,31 @@ export function PanelApp({
       paused: repository.isPaused,
     });
   };
+  const grantAccess = (site: InspectedSite): void => {
+    const grantRevision = targetRevision.current;
+    grantInFlight.current = true;
+    setAccess({ status: 'granting', site });
+    void accessController.grant(site).then((result) => {
+      if (grantRevision !== targetRevision.current) {
+        return;
+      }
+      grantInFlight.current = false;
+      if (!result.granted) {
+        setAccess({ status: 'missing', site, message: result.message });
+        return;
+      }
+      if (!result.captureStarted) {
+        setAccess({
+          status: 'activation-error',
+          site,
+          message: result.message
+            ?? 'Access was granted, but capture could not start in this page.',
+        });
+        return;
+      }
+      setAccess({ status: 'active', site, justGranted: true });
+    });
+  };
   const clear = (): void => {
     setExpandedSignalIds(new Set());
     repository.clear();
@@ -218,6 +337,11 @@ export function PanelApp({
           </button>
         </div>
       </header>
+      <AccessNotice
+        access={access}
+        onGrant={grantAccess}
+        onReload={() => accessController.reload()}
+      />
       <nav className="tabs card">
         <button
           className={activeTab === 'timeline' ? 'tab active' : 'tab'}
@@ -281,6 +405,127 @@ export function PanelApp({
         )}
       </section>
     </main>
+  );
+}
+
+function accessStateFromSnapshot(snapshot: PanelAccessSnapshot): AccessState {
+  if (!snapshot.supported) {
+    return { status: 'unsupported', message: snapshot.message };
+  }
+  if (!snapshot.granted) {
+    return { status: 'missing', site: snapshot.site };
+  }
+  return { status: 'active', site: snapshot.site, justGranted: false };
+}
+
+function AccessNotice({
+  access,
+  onGrant,
+  onReload,
+}: {
+  access: AccessState;
+  onGrant: (site: InspectedSite) => void;
+  onReload: () => void;
+}): ReactElement {
+  if (access.status === 'checking') {
+    return (
+      <section className="access-notice card" data-testid="access-checking">
+        <span className="access-indicator" aria-hidden="true" />
+        <div><strong>Checking site access…</strong></div>
+      </section>
+    );
+  }
+
+  if (access.status === 'unsupported') {
+    return (
+      <section className="access-notice access-warning card" data-testid="access-unsupported">
+        <Icon name="activity" className="state-icon" />
+        <div>
+          <strong>This page cannot be inspected</strong>
+          <p className="muted">{access.message}</p>
+        </div>
+      </section>
+    );
+  }
+
+  if (access.status === 'activating') {
+    return (
+      <section className="access-notice card" data-testid="access-activating">
+        <span className="access-indicator" aria-hidden="true" />
+        <div className="access-copy">
+          <strong>Access granted. Starting capture…</strong>
+          <p className="muted">Installing Koshko in the current page without reloading.</p>
+        </div>
+      </section>
+    );
+  }
+
+  if (access.status === 'missing' || access.status === 'granting') {
+    const site = access.site;
+    return (
+      <section className="access-notice access-required card" data-testid="access-required">
+        <Icon name="activity" className="state-icon" />
+        <div className="access-copy">
+          <strong>Allow Koshko to read this site</strong>
+          <p>
+            Grant explicit access to <code>{site.origin}</code> and start
+            capturing new Koshko events. Chrome grants this scheme and host on
+            every port.
+          </p>
+          {access.status === 'missing' && access.message ? (
+            <p className="access-error" role="alert">{access.message}</p>
+          ) : null}
+        </div>
+        <button
+          type="button"
+          className="primary"
+          disabled={access.status === 'granting'}
+          onClick={() => onGrant(site)}
+        >
+          <Icon name="plus" className="button-icon" />
+          {access.status === 'granting'
+            ? 'Granting access…'
+            : 'Grant access and start capture'}
+        </button>
+      </section>
+    );
+  }
+
+  if (access.status === 'activation-error') {
+    return (
+      <section className="access-notice access-warning card" data-testid="access-activation-error">
+        <Icon name="activity" className="state-icon" />
+        <div className="access-copy">
+          <strong>Access granted; capture needs attention</strong>
+          <p>{access.message}</p>
+          <p className="muted">
+            Koshko keeps access to {access.site.origin}. Reload to install
+            capture at the next document start.
+          </p>
+        </div>
+        <button type="button" onClick={onReload}>Reload target</button>
+      </section>
+    );
+  }
+
+  return (
+    <section className="access-notice access-active card" data-testid="access-active">
+      <span className="access-indicator" aria-hidden="true" />
+      <div className="access-copy">
+        <strong>Site access granted</strong>
+        <p className="muted">
+          Koshko can read new events from {access.site.origin}.
+          {access.justGranted
+            ? ' Events emitted before access was granted were missed.'
+            : ''}
+        </p>
+      </div>
+      {access.justGranted ? (
+        <button type="button" className="ghost" onClick={onReload}>
+          Reload target
+        </button>
+      ) : null}
+    </section>
   );
 }
 

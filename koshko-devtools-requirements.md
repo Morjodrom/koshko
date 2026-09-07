@@ -411,6 +411,21 @@ Requirements:
 ## 15. Permissions and privacy
 
 - Use optional host permissions rather than unconditional access to every website.
+- Opening the Koshko panel should register a browser-native host-access request when the browser
+  supports it. The request must be removed while the panel is hidden; accepting it remains an
+  explicit user action.
+- When top-level access is missing, the panel must show a prominent **Grant access and start
+  capture** action for the inspected HTTP(S) site. The Koshko toolbar action must offer the same
+  explicit grant for the active site.
+- A successful panel or toolbar grant must register future document-start capture and immediately
+  inject capture into the current top-level document without reloading it. The UI must explain that
+  events emitted before the grant were missed and may offer, but must not force, a reload.
+- Chrome host match patterns apply to a scheme and hostname across ports. Permission copy and stored
+  grant presentation must not imply that a non-default port is isolated from other ports.
+- Native grants and removals made through Chrome UI must reconcile the stored grant list and runtime
+  content-script registrations.
+- The options page remains available for reviewing/removing grants and explicitly granting relevant
+  cross-origin frame sites.
 - The user must grant access to both the top-level application origin and relevant frame origins.
 - The panel must identify frames from which collection is unavailable due to missing permission.
 - The extension must request no network, cookies, history, or native-messaging permission.

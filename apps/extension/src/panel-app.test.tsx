@@ -4,11 +4,14 @@ import {
   fireEvent,
   render,
   screen,
+  waitFor,
   within,
 } from '@testing-library/react';
 import type { CapturedSignalV1, CapturedStateMutationV1 } from '@koshko/protocol';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { PanelApp, type PanelMessagePort } from './panel-app';
+import type { PanelAccessController, PanelAccessSnapshot } from './panel-access';
+import type { PanelAccessChange } from './panel-access';
 import { formatTime, KoshkoRepository } from './repository';
 import {
   PANEL_MESSAGE_CAPTURE,
@@ -119,7 +122,26 @@ function captured(overrides: Partial<CapturedSignalV1> = {}): CapturedSignalV1 {
   };
 }
 
-function mountPanel(): {
+function createAccessController(
+  snapshot: PanelAccessSnapshot = {
+    supported: true,
+    site: {
+      origin: 'https://demo.example.test',
+      matchPattern: 'https://demo.example.test/*',
+    },
+    granted: true,
+  },
+): PanelAccessController {
+  return {
+    inspect: vi.fn().mockResolvedValue(snapshot),
+    grant: vi.fn().mockResolvedValue({ granted: true, captureStarted: true }),
+    activate: vi.fn().mockResolvedValue({ granted: true, captureStarted: true }),
+    reload: vi.fn(),
+    subscribe: vi.fn().mockReturnValue(() => {}),
+  };
+}
+
+function mountPanel(accessController = createAccessController()): {
   port: FakePanelPort;
   repository: KoshkoRepository;
   downloadJsonl: ReturnType<typeof vi.fn>;
@@ -133,6 +155,7 @@ function mountPanel(): {
       repository={repository}
       port={port}
       tabId={17}
+      accessController={accessController}
       downloadJsonl={downloadJsonl}
     />,
   );
@@ -142,6 +165,134 @@ function mountPanel(): {
 
 describe('PanelApp', () => {
   afterEach(cleanup);
+
+  it('grants the inspected site explicitly and explains missed startup events', async () => {
+    const accessController = createAccessController({
+      supported: true,
+      site: {
+        origin: 'https://demo.example.test',
+        matchPattern: 'https://demo.example.test/*',
+      },
+      granted: false,
+    });
+    mountPanel(accessController);
+
+    await screen.findByTestId('access-required');
+    fireEvent.click(screen.getByRole('button', {
+      name: 'Grant access and start capture',
+    }));
+
+    await waitFor(() => expect(accessController.grant).toHaveBeenCalledWith({
+      origin: 'https://demo.example.test',
+      matchPattern: 'https://demo.example.test/*',
+    }));
+    expect((await screen.findByTestId('access-active')).textContent).toContain(
+      'Events emitted before access was granted were missed.',
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Reload target' }));
+    expect(accessController.reload).toHaveBeenCalledOnce();
+  });
+
+  it('keeps the grant control visible after permission is denied', async () => {
+    const accessController = createAccessController({
+      supported: true,
+      site: {
+        origin: 'https://demo.example.test',
+        matchPattern: 'https://demo.example.test/*',
+      },
+      granted: false,
+    });
+    vi.mocked(accessController.grant).mockResolvedValue({
+      granted: false,
+      message: 'Access was not granted. Koshko did not read this page.',
+    });
+    mountPanel(accessController);
+
+    await screen.findByTestId('access-required');
+    fireEvent.click(screen.getByRole('button', {
+      name: 'Grant access and start capture',
+    }));
+
+    expect((await screen.findByRole('alert')).textContent).toContain(
+      'Access was not granted. Koshko did not read this page.',
+    );
+  });
+
+  it('shows unsupported and activation-error access states', async () => {
+    const unsupported = createAccessController({
+      supported: false,
+      message: 'Only http and https origins can be granted.',
+    });
+    const first = mountPanel(unsupported);
+    expect((await screen.findByTestId('access-unsupported')).textContent).toContain(
+      'Only http and https origins can be granted.',
+    );
+    first.unmount();
+
+    const failed = createAccessController({
+      supported: true,
+      site: {
+        origin: 'https://demo.example.test',
+        matchPattern: 'https://demo.example.test/*',
+      },
+      granted: false,
+    });
+    vi.mocked(failed.grant).mockResolvedValue({
+      granted: true,
+      captureStarted: false,
+      message: 'The page changed before capture started.',
+    });
+    mountPanel(failed);
+    await screen.findByTestId('access-required');
+    fireEvent.click(screen.getByRole('button', {
+      name: 'Grant access and start capture',
+    }));
+
+    expect((await screen.findByTestId('access-activation-error')).textContent).toContain(
+      'The page changed before capture started.',
+    );
+  });
+
+  it('immediately activates a Chrome-native grant and surfaces injection failure', async () => {
+    const site = {
+      origin: 'https://demo.example.test',
+      matchPattern: 'https://demo.example.test/*',
+    };
+    let snapshot: PanelAccessSnapshot = {
+      supported: true,
+      site,
+      granted: false,
+    };
+    let onChange: ((change: PanelAccessChange) => void) | undefined;
+    const accessController: PanelAccessController = {
+      inspect: vi.fn(async () => snapshot),
+      grant: vi.fn(),
+      activate: vi.fn().mockResolvedValue({
+        granted: true,
+        captureStarted: false,
+        message: 'The current document rejected injection.',
+      }),
+      reload: vi.fn(),
+      subscribe: vi.fn((listener) => {
+        onChange = listener;
+        return () => {};
+      }),
+    };
+    mountPanel(accessController);
+    await screen.findByTestId('access-required');
+    snapshot = { supported: true, site, granted: true };
+
+    act(() => onChange?.({
+      kind: 'permission-added',
+      origins: ['https://demo.example.test/*'],
+    }));
+
+    await waitFor(() => expect(accessController.activate).toHaveBeenCalledWith(site));
+    expect((await screen.findByTestId('access-activation-error')).textContent).toContain(
+      'The current document rejected injection.',
+    );
+    expect(accessController.grant).not.toHaveBeenCalled();
+  });
 
   it('shows empty and disconnected states', () => {
     const { port } = mountPanel();

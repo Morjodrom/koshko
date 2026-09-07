@@ -7,7 +7,11 @@ import {
 } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { OptionsApp } from './options-app';
-import { PANEL_MESSAGE_SYNC_ORIGINS, STORAGE_KEY } from './shared';
+import {
+  PANEL_MESSAGE_ACTIVATE_ORIGIN,
+  PANEL_MESSAGE_RECONCILE_PERMISSIONS,
+  STORAGE_KEY,
+} from './shared';
 
 describe('OptionsApp', () => {
   let origins: string[];
@@ -21,14 +25,28 @@ describe('OptionsApp', () => {
   beforeEach(() => {
     origins = [];
     request = vi.fn().mockResolvedValue(true);
-    remove = vi.fn().mockResolvedValue(true);
+    remove = vi.fn(async (permission: { origins: string[] }) => {
+      const removed = new Set(permission.origins.map((pattern) => pattern.replace(/\/\*$/, '')));
+      origins = origins.filter((origin) => !removed.has(origin));
+      return true;
+    });
     set = vi.fn(async (value: Record<string, string[]>) => {
       origins = value[STORAGE_KEY];
     });
-    sendMessage = vi.fn().mockResolvedValue(undefined);
+    sendMessage = vi.fn(async (message: { type: string; origin?: string }) => {
+      if (message.type === PANEL_MESSAGE_ACTIVATE_ORIGIN && message.origin) {
+        origins = Array.from(new Set([...origins, message.origin])).sort();
+      }
+      return { ok: true };
+    });
     Object.assign(globalThis, {
       chrome: {
-        permissions: { request, remove },
+        permissions: {
+          request,
+          remove,
+          onAdded: { addListener: vi.fn(), removeListener: vi.fn() },
+          onRemoved: { addListener: vi.fn(), removeListener: vi.fn() },
+        },
         storage: {
           local: {
             get: vi.fn(async () => ({ [STORAGE_KEY]: origins })),
@@ -67,19 +85,16 @@ describe('OptionsApp', () => {
     await waitFor(() =>
       expect(
         screen.getByText(
-          'Granted https://a.example.test. Reload the target page.',
+          'Granted https://a.example.test. Reload the target frame to capture its startup events.',
         ),
       ).toBeTruthy(),
     );
     expect(request).toHaveBeenCalledWith({
       origins: ['https://a.example.test/*'],
     });
-    expect(set).toHaveBeenCalledWith({
-      [STORAGE_KEY]: ['https://a.example.test', 'https://z.example.test'],
-    });
     expect(sendMessage).toHaveBeenCalledWith({
-      type: PANEL_MESSAGE_SYNC_ORIGINS,
-      origins: ['https://a.example.test', 'https://z.example.test'],
+      type: PANEL_MESSAGE_ACTIVATE_ORIGIN,
+      origin: 'https://a.example.test',
     });
   });
 
@@ -123,10 +138,8 @@ describe('OptionsApp', () => {
     expect(remove).toHaveBeenCalledWith({
       origins: ['https://remove.example.test/*'],
     });
-    expect(set).toHaveBeenCalledWith({ [STORAGE_KEY]: [] });
     expect(sendMessage).toHaveBeenCalledWith({
-      type: PANEL_MESSAGE_SYNC_ORIGINS,
-      origins: [],
+      type: PANEL_MESSAGE_RECONCILE_PERMISSIONS,
     });
   });
 });

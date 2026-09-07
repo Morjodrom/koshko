@@ -6,8 +6,17 @@ export default defineConfig({
   manifest: {
     name: 'Koshko Dev Tools',
     description: 'Disposable Chrome DevTools prototype for koshko signals.',
-    permissions: ['scripting', 'storage'],
+    permissions: ['activeTab', 'scripting', 'storage'],
     optional_host_permissions: ['http://*/*', 'https://*/*'],
+    action: {
+      default_title: 'Grant Koshko access to this site',
+      default_icon: {
+        16: 'icons/icon-16.png',
+        32: 'icons/icon-32.png',
+        48: 'icons/icon-48.png',
+        128: 'icons/icon-128.png',
+      },
+    },
     icons: {
       16: 'icons/icon-16.png',
       32: 'icons/icon-32.png',

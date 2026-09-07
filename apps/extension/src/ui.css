@@ -100,6 +100,7 @@ button {
 }
 button:hover { border-color: var(--noir-accent); background: var(--noir-accent-soft); }
 button:active { transform: translateY(1px); }
+button:disabled { cursor: wait; opacity: .66; transform: none; }
 button.primary { border-color: var(--noir-accent); background: var(--noir-accent); color: #fffaf0; }
 button.primary:hover { background: color-mix(in srgb, var(--noir-accent) 86%, #000); }
 button.ghost { background: transparent; }
@@ -110,6 +111,17 @@ button.ghost { background: transparent; }
 .field input::placeholder { color: var(--noir-muted); }
 #origin-form { display: grid; gap: 16px; max-width: 720px; }
 .status { min-height: 1.2em; margin: 0; font-size: .9rem; }
+.access-notice { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 12px; padding-block: 12px; }
+.access-notice .state-icon { width: 22px; height: 22px; }
+.access-copy { display: grid; gap: 4px; min-width: 0; }
+.access-copy p { font-size: .86rem; line-height: 1.45; }
+.access-copy code { overflow-wrap: anywhere; color: var(--noir-accent); }
+.access-required { border-color: color-mix(in srgb, var(--noir-accent) 60%, var(--noir-line)); background: color-mix(in srgb, var(--noir-accent-soft) 48%, var(--noir-surface)); }
+.access-active { border-color: color-mix(in srgb, #278358 50%, var(--noir-line)); box-shadow: none; }
+.access-warning { border-color: color-mix(in srgb, #b66a00 58%, var(--noir-line)); }
+.access-error { color: #a32f3b; font-weight: 700; }
+.access-indicator { width: 10px; height: 10px; border-radius: 50%; background: #278358; box-shadow: 0 0 0 4px color-mix(in srgb, #278358 16%, transparent); }
+[data-testid="access-checking"] .access-indicator { background: var(--noir-muted); box-shadow: none; }
 .list { display: grid; gap: 8px; margin: 12px 0 0; padding: 0; list-style: none; }
 .list-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 12px; border: 1px solid var(--noir-line); border-radius: 10px; background: var(--noir-surface-raised); overflow-wrap: anywhere; }
 
@@ -174,6 +186,8 @@ button.ghost { background: transparent; }
   .toolbar { align-items: flex-start; flex-direction: column; }
   .toolbar .actions { width: 100%; }
   .toolbar .actions button { flex: 1 1 auto; }
+  .access-notice { grid-template-columns: auto 1fr; align-items: start; }
+  .access-notice > button { grid-column: 1 / -1; width: 100%; }
   .tabs { overflow-x: auto; }
   .log-filters { grid-template-columns: 1fr; }
   .tab { flex: 0 0 auto; }

@@ -19,7 +19,7 @@ export async function syncRegisteredContentScripts(origins: string[]): Promise<v
   const expectedIds = new Set(normalized.map((origin) => originToScriptId(origin)));
 
   for (const script of registered) {
-    if (script.id.startsWith(CONTENT_SCRIPT_ID_PREFIX) && !expectedIds.has(script.id)) {
+    if (isKoshkoCaptureScript(script.id) && !expectedIds.has(script.id)) {
       await chrome.scripting.unregisterContentScripts({ ids: [script.id] });
     }
   }
@@ -42,4 +42,10 @@ export async function syncRegisteredContentScripts(origins: string[]): Promise<v
       await chrome.scripting.registerContentScripts([script]);
     }
   }
+}
+
+function isKoshkoCaptureScript(id: string): boolean {
+  // `koshko-<origin>` was used before the ID prefix and generator were made
+  // consistent. Treat those IDs as ours so an upgrade removes stale scripts.
+  return id.startsWith(`${CONTENT_SCRIPT_ID_PREFIX}-`) || /^koshko-https?-/.test(id);
 }

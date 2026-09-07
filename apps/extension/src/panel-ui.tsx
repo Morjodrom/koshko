@@ -2,6 +2,7 @@ import { createRoot } from 'react-dom/client';
 import { PanelApp, type PanelMessagePort } from './panel-app';
 import { PANEL_PORT_PREFIX } from './shared';
 import { KoshkoRepository } from './repository';
+import { createPanelAccessController } from './panel-access';
 import './ui.css';
 
 const mountTarget = document.querySelector<HTMLDivElement>('#app');
@@ -23,6 +24,7 @@ createRoot(mountTarget).render(
     repository={repository}
     port={port}
     tabId={tabId}
+    accessController={createPanelAccessController(tabId)}
     downloadJsonl={(jsonl) => {
       const blob = new Blob([jsonl], { type: 'application/jsonl' });
       const url = URL.createObjectURL(blob);

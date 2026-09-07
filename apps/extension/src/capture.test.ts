@@ -92,6 +92,16 @@ describe('window capture', () => {
 
     expect(sendMessage).not.toHaveBeenCalled();
   });
+
+  it('installs only one listener when capture is activated repeatedly', () => {
+    const sendMessage = vi.fn(() => Promise.resolve());
+    vi.stubGlobal('chrome', { runtime: { sendMessage } });
+    cleanups.push(startCapture(), startCapture());
+
+    dispatchSelfMessage(validSignalMessage());
+
+    expect(sendMessage).toHaveBeenCalledTimes(1);
+  });
 });
 
 function dispatchSelfMessage(data: unknown): void {

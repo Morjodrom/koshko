@@ -4,6 +4,8 @@ export const CONTENT_SCRIPT_JS_PATH = 'content-scripts/capture.js';
 export const PANEL_PORT_PREFIX = 'koshko-panel:';
 export const PANEL_MESSAGE_CAPTURE = 'koshko:capture';
 export const PANEL_MESSAGE_SYNC_ORIGINS = 'koshko:sync-origins';
+export const PANEL_MESSAGE_ACTIVATE_ORIGIN = 'koshko:activate-origin';
+export const PANEL_MESSAGE_RECONCILE_PERMISSIONS = 'koshko:reconcile-permissions';
 export const PANEL_MESSAGE_SET_PAUSED = 'koshko:set-paused';
 export const PANEL_MESSAGE_CLEAR = 'koshko:clear';
 
@@ -36,6 +38,22 @@ export interface SyncOriginsMessage {
   origins: string[];
 }
 
+export interface ActivateOriginMessage {
+  type: typeof PANEL_MESSAGE_ACTIVATE_ORIGIN;
+  origin: string;
+  tabId?: number;
+}
+
+export interface ReconcilePermissionsMessage {
+  type: typeof PANEL_MESSAGE_RECONCILE_PERMISSIONS;
+}
+
+export interface ActivationResponse {
+  ok: boolean;
+  captureStarted: boolean;
+  error?: string;
+}
+
 export interface SetPausedMessage {
   type: typeof PANEL_MESSAGE_SET_PAUSED;
   paused: boolean;
@@ -45,7 +63,13 @@ export interface ClearMessage {
   type: typeof PANEL_MESSAGE_CLEAR;
 }
 
-export type BackgroundMessage = CaptureTransportMessage | SyncOriginsMessage | SetPausedMessage | ClearMessage;
+export type BackgroundMessage =
+  | CaptureTransportMessage
+  | SyncOriginsMessage
+  | ActivateOriginMessage
+  | ReconcilePermissionsMessage
+  | SetPausedMessage
+  | ClearMessage;
 
 export interface PanelSignalCaptureMessage {
   type: typeof PANEL_MESSAGE_CAPTURE;

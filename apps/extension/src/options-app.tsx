@@ -1,5 +1,8 @@
 import { useEffect, useState, type FormEvent, type ReactElement } from 'react';
-import { PANEL_MESSAGE_SYNC_ORIGINS, STORAGE_KEY } from './shared';
+import {
+  PANEL_MESSAGE_ACTIVATE_ORIGIN,
+  PANEL_MESSAGE_RECONCILE_PERMISSIONS,
+} from './shared';
 import { getStoredOrigins } from './registry';
 import { normalizeOrigin, originToMatchPattern } from './origins';
 import { BrandLockup, Icon } from './brand';
@@ -13,16 +16,18 @@ export function OptionsApp(): ReactElement {
 
   useEffect(() => {
     void refreshOrigins();
+    const onPermissionChange = (): void => {
+      void refreshOrigins();
+    };
+    chrome.permissions.onAdded.addListener(onPermissionChange);
+    chrome.permissions.onRemoved.addListener(onPermissionChange);
+
+    return () => {
+      chrome.permissions.onAdded.removeListener(onPermissionChange);
+      chrome.permissions.onRemoved.removeListener(onPermissionChange);
+    };
   }, []);
 
-  const syncOrigins = async (next: string[]): Promise<void> => {
-    await chrome.storage.local.set({ [STORAGE_KEY]: next });
-    await chrome.runtime.sendMessage({
-      type: PANEL_MESSAGE_SYNC_ORIGINS,
-      origins: next,
-    });
-    setOrigins(next);
-  };
   const grantOrigin = async (
     event: FormEvent<HTMLFormElement>,
   ): Promise<void> => {
@@ -36,12 +41,13 @@ export function OptionsApp(): ReactElement {
         setStatus('Permission was not granted.');
         return;
       }
-      const next = Array.from(
-        new Set([...(await getStoredOrigins()), origin]),
-      ).sort((left, right) => left.localeCompare(right));
-      await syncOrigins(next);
+      await chrome.runtime.sendMessage({
+        type: PANEL_MESSAGE_ACTIVATE_ORIGIN,
+        origin,
+      });
+      await refreshOrigins();
       setInput('');
-      setStatus(`Granted ${origin}. Reload the target page.`);
+      setStatus(`Granted ${origin}. Reload the target frame to capture its startup events.`);
     } catch (error) {
       setStatus(
         error instanceof Error ? error.message : 'Could not grant origin.',
@@ -49,11 +55,13 @@ export function OptionsApp(): ReactElement {
     }
   };
   const removeOrigin = async (origin: string): Promise<void> => {
-    const next = origins.filter((value) => value !== origin);
     await chrome.permissions.remove({
       origins: [originToMatchPattern(origin)],
     });
-    await syncOrigins(next);
+    await chrome.runtime.sendMessage({
+      type: PANEL_MESSAGE_RECONCILE_PERMISSIONS,
+    });
+    await refreshOrigins();
     setStatus(`Removed ${origin}.`);
   };
 
@@ -63,7 +71,8 @@ export function OptionsApp(): ReactElement {
         <BrandLockup />
         <h1>Origin access</h1>
         <p className="muted">
-          Grant one origin at a time, then reload the page you want to inspect.
+          The panel and toolbar can grant the current site. Use this page for
+          cross-origin frames or to review and remove access.
         </p>
       </header>
       <form id="origin-form" className="card" onSubmit={grantOrigin}>
@@ -85,6 +94,10 @@ export function OptionsApp(): ReactElement {
             Grant origin
           </button>
         </div>
+        <p className="muted">
+          Chrome site permissions apply to this scheme and hostname on every
+          port.
+        </p>
         <p id="status" className="status muted">
           {status}
         </p>
@@ -98,7 +111,7 @@ export function OptionsApp(): ReactElement {
             <li className="empty empty-with-icon">
               <Icon name="activity" className="state-icon" />
               <p>No origins granted yet.</p>
-              <span>Grant an origin to begin inspecting signals.</span>
+              <span>Open Koshko in DevTools or grant a frame origin here.</span>
             </li>
           ) : (
             origins.map((origin) => (

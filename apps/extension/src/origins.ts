@@ -1,9 +1,12 @@
 export function normalizeOrigin(input: string): string {
-  const origin = new URL(input).origin;
-  if (origin === 'null') {
+  const url = new URL(input);
+  if (url.protocol !== 'http:' && url.protocol !== 'https:') {
     throw new Error('Only http and https origins can be granted.');
   }
-  return origin;
+
+  // Chrome match patterns cannot restrict ports. Store the permission's real
+  // scheme-and-host scope so multiple ports do not create duplicate scripts.
+  return `${url.protocol}//${url.hostname}`;
 }
 
 export function originToMatchPattern(origin: string): string {
@@ -12,7 +15,24 @@ export function originToMatchPattern(origin: string): string {
 }
 
 export function originToScriptId(origin: string): string {
-  return `koshko-${origin.replace(/[^a-z0-9]+/gi, '-').replace(/^-+|-+$/g, '').toLowerCase() || 'origin'}`;
+  const suffix = originToMatchPattern(origin)
+    .replace(/[^a-z0-9]+/gi, '-')
+    .replace(/^-+|-+$/g, '')
+    .toLowerCase() || 'origin';
+  return `koshko-capture-${suffix}`;
+}
+
+export function matchPatternToOrigin(pattern: string): string | null {
+  const match = /^(https?):\/\/([^/*]+)\/\*$/.exec(pattern);
+  if (!match) {
+    return null;
+  }
+
+  try {
+    return normalizeOrigin(`${match[1]}://${match[2]}`);
+  } catch {
+    return null;
+  }
 }
 
 export function normalizeOriginList(values: string[]): string[] {
