@@ -128,7 +128,7 @@ export function normalizeKoshkoSignalV1(input: unknown): KoshkoSignalV1 {
 
 export function normalizeKoshkoStateMutationV1(input: unknown): KoshkoStateMutationV1 {
   const record = isObjectLike(input) ? input : {};
-  return {
+  const mutation: KoshkoStateMutationV1 = {
     protocol: 'koshko',
     version: 1,
     id: normalizeIdentifier(readOwnDataProperty(record, 'id'), INVALID_VALUE),
@@ -137,6 +137,13 @@ export function normalizeKoshkoStateMutationV1(input: unknown): KoshkoStateMutat
     occurredAt: normalizeTimestamp(readOwnDataProperty(record, 'occurredAt')),
     patch: normalizeStatePatch(readOwnDataProperty(record, 'patch')),
   };
+
+  const label = normalizeOptionalIdentifier(readOwnDataProperty(record, 'label'));
+  if (label !== undefined) {
+    mutation.label = label;
+  }
+
+  return mutation;
 }
 
 export function normalizeCapturedSignalV1(input: unknown): CapturedSignalV1 {

@@ -23,6 +23,7 @@ import {
   formatDateTime,
   formatTime,
   type KoshkoLogEntry,
+  type KoshkoStateSnapshot,
   type KoshkoTimelineActor,
 } from './repository';
 import type {
@@ -69,6 +70,12 @@ export function PanelApp({
   );
   const [displayState, setDisplayState] = useState<JsonObject>(
     repository.getDisplayState(),
+  );
+  const [displayStateHistory, setDisplayStateHistory] = useState<KoshkoStateSnapshot[]>(
+    repository.getDisplayStateHistory(),
+  );
+  const [selectedStateSnapshotIndex, setSelectedStateSnapshotIndex] = useState<number | null>(
+    repository.getSelectedStateSnapshotIndex(),
   );
   const [displayLog, setDisplayLog] = useState<KoshkoLogEntry[]>(
     repository.getDisplayLog(),
@@ -172,6 +179,8 @@ export function PanelApp({
       const log = repository.getDisplayLog();
       setDisplayLog(log);
       setDisplayState(repository.getDisplayState());
+      setDisplayStateHistory(repository.getDisplayStateHistory());
+      setSelectedStateSnapshotIndex(repository.getSelectedStateSnapshotIndex());
       const discoveredActorKeys = getLogActors(log).map((actor) => actor.key);
       const newActorKeys = discoveredActorKeys.filter(
         (key) => !knownActorKeys.current.has(key),
@@ -254,6 +263,9 @@ export function PanelApp({
     setExpandedSignalIds(new Set());
     repository.clear();
     sendCommand({ type: PANEL_MESSAGE_CLEAR });
+  };
+  const selectStateSnapshot = (index: number | null): void => {
+    repository.selectStateSnapshot(index);
   };
   const toggleDetails = (signalId: string): void => {
     setExpandedSignalIds((previous) => {
@@ -380,7 +392,12 @@ export function PanelApp({
             }}
           />
         ) : (
-          <GlobalState state={displayState} />
+          <GlobalState
+            state={displayState}
+            history={displayStateHistory}
+            selectedIndex={selectedStateSnapshotIndex}
+            onSelect={selectStateSnapshot}
+          />
         )}
       </section>
     </main>
@@ -508,11 +525,94 @@ function AccessNotice({
   );
 }
 
-function GlobalState({ state }: { state: JsonObject }): ReactElement {
+function GlobalState({
+  state,
+  history,
+  selectedIndex,
+  onSelect,
+}: {
+  state: JsonObject;
+  history: KoshkoStateSnapshot[];
+  selectedIndex: number | null;
+  onSelect: (index: number | null) => void;
+}): ReactElement {
+  const latestIndex = history.at(-1)?.index ?? 0;
+  const activeIndex = selectedIndex ?? latestIndex;
+  const activePosition = history.findIndex((snapshot) => snapshot.index === activeIndex);
+  const canSelectPrevious = activePosition > 0;
+  const canSelectNext = activePosition >= 0 && activePosition < history.length - 1;
+
   return (
-    <pre className="global-state" data-testid="global-state" aria-label="Global state">
-      {JSON.stringify(state, null, 2)}
-    </pre>
+    <div className="state-inspector" data-testid="state-inspector">
+      <div className="state-history" aria-label="Global state history">
+        <div className="state-history-header">
+          <div>
+            <h2>State history</h2>
+            <p className="muted" role="status" data-testid="state-position">
+              {selectedIndex === null
+                ? `Live · following snapshot ${activePosition + 1} of ${history.length}`
+                : `Snapshot ${activePosition + 1} of ${history.length} · pinned`}
+            </p>
+          </div>
+          <div className="state-history-controls" aria-label="State history controls">
+            <button
+              type="button"
+              onClick={() => onSelect(history[activePosition - 1].index)}
+              disabled={!canSelectPrevious}
+            >
+              Previous
+            </button>
+            <button
+              type="button"
+              onClick={() => onSelect(history[activePosition + 1].index)}
+              disabled={!canSelectNext}
+            >
+              Next
+            </button>
+            <button
+              type="button"
+              className="primary"
+              onClick={() => onSelect(null)}
+              disabled={selectedIndex === null}
+            >
+              Live
+            </button>
+          </div>
+        </div>
+        <ol className="state-history-list" data-testid="state-history-list">
+          {history.map((snapshot) => {
+            const isActive = snapshot.index === activeIndex;
+            const mutation = snapshot.mutation?.mutation;
+            const label = snapshot.index === 0
+              ? 'Initial state'
+              : mutation?.label ?? `State mutation ${snapshot.index}`;
+            const metadata = mutation
+              ? `${formatDateTime(mutation.occurredAt)} · ${mutation.producerId}`
+              : 'Before captured mutations';
+
+            return (
+              <li key={snapshot.index}>
+                <button
+                  type="button"
+                  className={isActive ? 'state-history-entry active' : 'state-history-entry'}
+                  aria-current={isActive ? 'true' : undefined}
+                  onClick={() => onSelect(snapshot.index)}
+                >
+                  <span className="state-history-entry-label">{label}</span>
+                  <span className="state-history-entry-metadata">{metadata}</span>
+                </button>
+              </li>
+            );
+          })}
+        </ol>
+      </div>
+      <div className="state-value">
+        <h2>Selected state</h2>
+        <pre className="global-state" data-testid="global-state" aria-label="Selected global state">
+          {JSON.stringify(state, null, 2)}
+        </pre>
+      </div>
+    </div>
   );
 }
 

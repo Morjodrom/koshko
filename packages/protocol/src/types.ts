@@ -61,6 +61,7 @@ export interface KoshkoStateMutationV1 {
   producerId: string;
   producerSequence: number;
   occurredAt: number;
+  label?: string;
   patch: KoshkoStatePatchOperationV1[];
 }
 

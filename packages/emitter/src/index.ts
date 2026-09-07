@@ -38,6 +38,7 @@ export interface StateEmitterOptions {
 
 export interface StateMutationOptions {
   occurredAt?: number;
+  label?: string;
 }
 
 export type StatePatchOperationInput =
@@ -113,6 +114,7 @@ export function createStateEmitter(options: StateEmitterOptions = {}): StateEmit
         producerId,
         producerSequence,
         occurredAt,
+        label: mutationOptions?.label,
         patch,
       };
       let mutation: KoshkoStateMutationV1;

@@ -13,7 +13,7 @@ import { PanelApp } from './panel-app';
 import type { ManagedPanelConnection, PanelConnectionStatus } from './panel-connection';
 import type { PanelAccessController, PanelAccessSnapshot } from './panel-access';
 import type { PanelAccessChange } from './panel-access';
-import { formatTime, KoshkoRepository } from './repository';
+import { formatDateTime, formatTime, KoshkoRepository } from './repository';
 import {
   PANEL_MESSAGE_CAPTURE,
   PANEL_MESSAGE_CLEAR,
@@ -611,6 +611,121 @@ describe('PanelApp', () => {
     fireEvent.click(screen.getByTestId('export-button'));
     expect(downloadJsonl).toHaveBeenCalledWith(expect.not.stringContaining('checkout'));
     expect(repository.getState()).toEqual({ checkout: { total: 100, currency: 'RUB' } });
+  });
+
+  it('inspects state history with pinned snapshots and live updates', () => {
+    const { port } = mountPanel();
+    const firstOccurredAt = Date.parse('2026-09-05T12:34:56.789Z');
+    const first = capturedStateMutation(
+      [{ op: 'add', path: '/checkout', value: { total: 100 } }],
+      {
+        mutation: {
+          ...capturedStateMutation([]).mutation,
+          id: 'mutation-1',
+          label: 'Checkout initialized',
+          producerId: 'checkout-store',
+          occurredAt: firstOccurredAt,
+          patch: [{ op: 'add', path: '/checkout', value: { total: 100 } }],
+        },
+      },
+    );
+    const second = capturedStateMutation(
+      [{ op: 'replace', path: '/checkout/total', value: 200 }],
+      {
+        mutation: {
+          ...capturedStateMutation([]).mutation,
+          id: 'mutation-2',
+          producerSequence: 2,
+          producerId: 'pricing-store',
+          occurredAt: firstOccurredAt + 1000,
+          patch: [{ op: 'replace', path: '/checkout/total', value: 200 }],
+        },
+      },
+    );
+
+    act(() => {
+      port.emitStateMutation(first);
+      port.emitStateMutation(second);
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Global State' }));
+
+    const history = screen.getByTestId('state-history-list');
+    expect(within(history).getAllByRole('button')).toHaveLength(3);
+    expect(within(history).getByRole('button', { name: /Initial state/ }).textContent).toContain(
+      'Before captured mutations',
+    );
+    expect(within(history).getByRole('button', { name: /Checkout initialized/ }).textContent).toContain(
+      `${formatDateTime(firstOccurredAt)} · checkout-store`,
+    );
+    expect(within(history).getByRole('button', { name: /State mutation 2/ }).textContent).toContain(
+      'pricing-store',
+    );
+    expect(screen.getByTestId('state-position').textContent).toBe('Live · following snapshot 3 of 3');
+    expect(screen.getByRole('button', { name: 'Next' }).hasAttribute('disabled')).toBe(true);
+    expect(screen.getByRole('button', { name: 'Live' }).hasAttribute('disabled')).toBe(true);
+
+    fireEvent.click(within(history).getByRole('button', { name: /Initial state/ }));
+    expect(screen.getByTestId('global-state').textContent).toBe('{}');
+    expect(screen.getByTestId('state-position').textContent).toBe('Snapshot 1 of 3 · pinned');
+    expect(screen.getByRole('button', { name: 'Previous' }).hasAttribute('disabled')).toBe(true);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Next' }));
+    expect(screen.getByTestId('global-state').textContent).toBe('{\n  "checkout": {\n    "total": 100\n  }\n}');
+    fireEvent.click(screen.getByRole('button', { name: 'Next' }));
+    expect(screen.getByTestId('global-state').textContent).toContain('200');
+    expect(screen.getByTestId('state-position').textContent).toBe('Snapshot 3 of 3 · pinned');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Previous' }));
+    act(() => port.emitStateMutation(capturedStateMutation(
+      [{ op: 'replace', path: '/checkout/total', value: 300 }],
+      {
+        mutation: {
+          ...capturedStateMutation([]).mutation,
+          id: 'mutation-3',
+          producerSequence: 3,
+          patch: [{ op: 'replace', path: '/checkout/total', value: 300 }],
+        },
+      },
+    )));
+    expect(screen.getByTestId('global-state').textContent).toContain('100');
+    expect(screen.getByTestId('state-position').textContent).toBe('Snapshot 2 of 4 · pinned');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Live' }));
+    expect(screen.getByTestId('global-state').textContent).toContain('300');
+    expect(screen.getByTestId('state-position').textContent).toBe('Live · following snapshot 4 of 4');
+
+    fireEvent.click(screen.getByTestId('clear-button'));
+    expect(within(screen.getByTestId('state-history-list')).getAllByRole('button')).toHaveLength(1);
+    expect(screen.getByTestId('state-position').textContent).toBe('Live · following snapshot 1 of 1');
+    expect(screen.getByTestId('global-state').textContent).toBe('{}');
+  });
+
+  it('resets pinned state history when the top-level document changes', () => {
+    const { port } = mountPanel();
+    act(() => port.emitStateMutation(capturedStateMutation([
+      { op: 'add', path: '/before-navigation', value: true },
+    ])));
+    fireEvent.click(screen.getByRole('button', { name: 'Global State' }));
+    fireEvent.click(within(screen.getByTestId('state-history-list')).getByRole('button', {
+      name: /Initial state/,
+    }));
+
+    act(() => port.emitStateMutation(capturedStateMutation(
+      [{ op: 'add', path: '/after-navigation', value: true }],
+      {
+        navigationId: 'navigation-2',
+        mutation: {
+          ...capturedStateMutation([]).mutation,
+          id: 'navigation-mutation',
+          patch: [{ op: 'add', path: '/after-navigation', value: true }],
+        },
+      },
+    )));
+
+    expect(within(screen.getByTestId('state-history-list')).getAllByRole('button')).toHaveLength(2);
+    expect(screen.getByTestId('state-position').textContent).toBe('Live · following snapshot 2 of 2');
+    expect(screen.getByTestId('global-state').textContent).toContain('after-navigation');
+    expect(screen.getByTestId('global-state').textContent).not.toContain('before-navigation');
   });
 
   it('filters the combined log by substring, actor, and entry type while retaining filters between tabs', () => {

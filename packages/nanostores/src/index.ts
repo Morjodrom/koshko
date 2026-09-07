@@ -28,12 +28,12 @@ export function connectNanoStores(
   });
   const namespacePath = toJsonPointer(namespace);
 
-  emitSnapshot(emitter, namespacePath, stores);
+  emitSnapshot(emitter, namespacePath, stores, 'Nano Stores initial snapshot');
 
-  const bridgeCleanups = Object.values(stores).map((store) => onNotify(
+  const bridgeCleanups = Object.entries(stores).map(([storeName, store]) => onNotify(
     store as Store,
-    () => {
-      emitSnapshot(emitter, namespacePath, stores);
+    ({ changed }) => {
+      emitSnapshot(emitter, namespacePath, stores, createChangeLabel(storeName, changed));
     },
   ));
 
@@ -48,6 +48,7 @@ function emitSnapshot(
   emitter: StateEmitter,
   namespacePath: string,
   stores: NanoStores,
+  label: string,
 ): void {
   const snapshot: Record<string, unknown> = {};
 
@@ -61,7 +62,12 @@ function emitSnapshot(
       path: namespacePath,
       value: snapshot,
     },
-  ]);
+  ], { label });
+}
+
+function createChangeLabel(storeName: string, changed: PropertyKey | undefined): string {
+  const target = changed === undefined ? storeName : `${storeName}.${String(changed)}`;
+  return `Nano Stores ${target} changed`;
 }
 
 function toJsonPointer(segment: string): string {

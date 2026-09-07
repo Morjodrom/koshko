@@ -255,4 +255,133 @@ describe('koshko dev tools repository', () => {
     });
     expect(repo.getDisplayLog().map((entry) => ('signal' in entry ? entry.signal.id : entry.mutation.id))).toEqual(['signal-next']);
   });
+
+  it('records immutable ordered state snapshots only for applied mutations and selects displayed history', () => {
+    const repo = new KoshkoRepository();
+    const stateMutation = (
+      id: string,
+      sequence: number,
+      patch: import('@koshko/protocol').KoshkoStateMutationV1['patch'],
+      label?: string,
+    ) => ({
+      mutation: {
+        protocol: 'koshko' as const,
+        version: 1 as const,
+        id,
+        producerId: 'state-producer',
+        producerSequence: sequence,
+        occurredAt: sequence,
+        label,
+        patch,
+      },
+      observedAt: sequence,
+      tabId: 1,
+      frameId: 0,
+      navigationId: 'nav-a',
+      frameUrl: 'https://example.com',
+      frameOrigin: 'https://example.com',
+    });
+
+    expect(repo.getDisplayStateHistory()).toEqual([{ index: 0, state: {} }]);
+    expect(repo.getSelectedStateSnapshotIndex()).toBeNull();
+
+    repo.record(stateMutation('add-cart', 1, [{ op: 'add', path: '/cart', value: { count: 1 } }], 'Cart created'));
+    repo.record(stateMutation('increment-cart', 2, [{ op: 'replace', path: '/cart/count', value: 2 }], 'Cart updated'));
+    repo.record(stateMutation('invalid', 3, [{ op: 'replace', path: '/missing', value: true }], 'Ignored'));
+
+    const stateHistory = repo.getDisplayStateHistory();
+    expect(stateHistory.map(({ index, label, state }) => ({ index, label, state }))).toEqual([
+      { index: 0, state: {} },
+      { index: 1, label: 'Cart created', state: { cart: { count: 1 } } },
+      { index: 2, label: 'Cart updated', state: { cart: { count: 2 } } },
+    ]);
+    expect(stateHistory[0].mutation).toBeUndefined();
+    expect(stateHistory[1].mutation?.mutation).toMatchObject({
+      id: 'add-cart',
+      producerId: 'state-producer',
+      occurredAt: 1,
+      label: 'Cart created',
+    });
+    expect(stateHistory[2].mutation?.mutation).toMatchObject({
+      id: 'increment-cart',
+      producerId: 'state-producer',
+      occurredAt: 2,
+      label: 'Cart updated',
+    });
+    expect(repo.getLog().map((entry) => ('mutation' in entry ? entry.mutation.id : entry.signal.id))).toEqual([
+      'add-cart', 'increment-cart', 'invalid',
+    ]);
+
+    expect(repo.selectStateSnapshot(0)).toBe(true);
+    expect(repo.getDisplayState()).toEqual({});
+    expect(repo.getSelectedStateSnapshotIndex()).toBe(0);
+
+    expect(repo.selectStateSnapshot(1)).toBe(true);
+    expect(repo.getDisplayState()).toEqual({ cart: { count: 1 } });
+
+    expect(repo.selectStateSnapshot(2)).toBe(true);
+    expect(repo.getDisplayState()).toEqual({ cart: { count: 2 } });
+    expect(repo.selectStateSnapshot(99)).toBe(false);
+    expect(repo.getSelectedStateSnapshotIndex()).toBe(2);
+  });
+
+  it('keeps a pinned snapshot during new input and restores Live selection', () => {
+    const repo = new KoshkoRepository();
+    const recordValue = (id: string, value: number): void => {
+      repo.record({
+        mutation: {
+          protocol: 'koshko', version: 1, id, producerId: 'state', producerSequence: value, occurredAt: value,
+          patch: [{ op: value === 1 ? 'add' : 'replace', path: '/value', value }],
+        },
+        observedAt: value, tabId: 1, frameId: 0, navigationId: 'nav', frameUrl: 'https://example.com', frameOrigin: 'https://example.com',
+      });
+    };
+
+    recordValue('first', 1);
+    expect(repo.selectStateSnapshot(1)).toBe(true);
+
+    recordValue('second', 2);
+
+    expect(repo.getDisplayStateHistory().map((snapshot) => snapshot.index)).toEqual([0, 1, 2]);
+    expect(repo.getDisplayState()).toEqual({ value: 1 });
+    expect(repo.getState()).toEqual({ value: 2 });
+    expect(repo.selectStateSnapshot(null)).toBe(true);
+    expect(repo.getSelectedStateSnapshotIndex()).toBeNull();
+    expect(repo.getDisplayState()).toEqual({ value: 2 });
+  });
+
+  it('freezes displayed state history while paused and resets history and selection on clear or navigation', () => {
+    const repo = new KoshkoRepository();
+    const recordMutation = (id: string, navigationId: string, patch: import('@koshko/protocol').KoshkoStateMutationV1['patch']): void => {
+      repo.record({
+        mutation: {
+          protocol: 'koshko', version: 1, id, producerId: 'state', producerSequence: 1, occurredAt: 1, patch,
+        },
+        observedAt: 1, tabId: 1, frameId: 0, navigationId, frameUrl: 'https://example.com', frameOrigin: 'https://example.com',
+      });
+    };
+
+    recordMutation('first', 'nav-a', [{ op: 'add', path: '/value', value: 1 }]);
+    repo.setPaused(true);
+    recordMutation('second', 'nav-a', [{ op: 'replace', path: '/value', value: 2 }]);
+
+    expect(repo.getDisplayStateHistory().map((snapshot) => snapshot.index)).toEqual([0, 1]);
+    expect(repo.getStateHistory().map((snapshot) => snapshot.index)).toEqual([0, 1, 2]);
+
+    repo.setPaused(false);
+    expect(repo.getDisplayStateHistory().map((snapshot) => snapshot.index)).toEqual([0, 1, 2]);
+    expect(repo.selectStateSnapshot(1)).toBe(true);
+    repo.clear();
+    expect(repo.getDisplayStateHistory()).toEqual([{ index: 0, state: {} }]);
+    expect(repo.getSelectedStateSnapshotIndex()).toBeNull();
+
+    recordMutation('after-clear', 'nav-a', [{ op: 'add', path: '/old', value: true }]);
+    expect(repo.selectStateSnapshot(1)).toBe(true);
+    recordMutation('after-navigation', 'nav-b', [{ op: 'add', path: '/fresh', value: true }]);
+    expect(repo.getDisplayStateHistory().map(({ index, state }) => ({ index, state }))).toEqual([
+      { index: 0, state: {} },
+      { index: 1, state: { fresh: true } },
+    ]);
+    expect(repo.getSelectedStateSnapshotIndex()).toBeNull();
+  });
 });

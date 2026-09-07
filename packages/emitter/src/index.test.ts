@@ -79,7 +79,7 @@ describe('state emitter', () => {
     ]);
     const second = emitter.mutate(
       [{ op: 'replace', path: '/checkout/ready', value: false }],
-      { occurredAt: 999 },
+      { occurredAt: 999, label: 'Checkout readiness updated' },
     );
 
     expect(first).toMatchObject({
@@ -100,6 +100,7 @@ describe('state emitter', () => {
     });
     expect(second.producerSequence).toBe(2);
     expect(second.occurredAt).toBe(999);
+    expect(second.label).toBe('Checkout readiness updated');
     expect(postMessage).toHaveBeenNthCalledWith(1, {
       protocol: 'koshko',
       version: 1,

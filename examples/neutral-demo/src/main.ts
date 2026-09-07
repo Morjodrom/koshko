@@ -67,19 +67,19 @@ function wireStateMutationButtons(): void {
   document.querySelector<HTMLButtonElement>('[data-state-mutation="add"]')?.addEventListener('click', () => {
     stateEmitter.mutate([
       { op: 'add', path: '/demo', value: { message: 'Added from the neutral demo', count: 1 } },
-    ]);
+    ], { label: 'Add demo state' });
     renderStatus('Added a global state object.');
   });
   document.querySelector<HTMLButtonElement>('[data-state-mutation="replace"]')?.addEventListener('click', () => {
     stateEmitter.mutate([
       { op: 'replace', path: '/demo/count', value: 2 },
-    ]);
+    ], { label: 'Update demo count' });
     renderStatus('Replaced the global state count. Add state first.');
   });
   document.querySelector<HTMLButtonElement>('[data-state-mutation="remove"]')?.addEventListener('click', () => {
     stateEmitter.mutate([
       { op: 'remove', path: '/demo/message' },
-    ]);
+    ], { label: 'Remove demo message' });
     renderStatus('Removed the global state message. Add state first.');
   });
 }

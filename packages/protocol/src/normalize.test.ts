@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { compareCapturedSignals, normalizeKoshkoSignalV1, normalizeJsonValue, normalizeCapturedSignalV1 } from './index';
+import {
+  compareCapturedSignals,
+  normalizeCapturedSignalV1,
+  normalizeJsonValue,
+  normalizeKoshkoSignalV1,
+  normalizeKoshkoStateMutationV1,
+} from './index';
 
 describe('protocol normalization', () => {
   it('redacts sensitive keys, strips URL queries, and preserves markers', () => {
@@ -98,5 +104,22 @@ describe('protocol normalization', () => {
       undefinedValue: '[Undefined]',
       symbol: '[Unsupported]',
     });
+  });
+
+  it('normalizes state mutation labels as bounded identifiers', () => {
+    const mutation = normalizeKoshkoStateMutationV1({
+      id: 'mutation-1',
+      producerId: 'state-demo',
+      producerSequence: 1,
+      occurredAt: 10,
+      label: 'Checkout\u0000 updated',
+      patch: [],
+    });
+
+    expect(mutation.label).toBe('Checkout updated');
+    expect(normalizeKoshkoStateMutationV1({
+      ...mutation,
+      label: 'x'.repeat(129),
+    }).label).toBe('[Truncated]');
   });
 });

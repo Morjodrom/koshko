@@ -5,6 +5,7 @@ import {
   type CapturedSignalV1,
   type CapturedStateMutationV1,
   type JsonObject,
+  type JsonValue,
 } from '@koshko/protocol';
 
 export interface KoshkoTimelineActor {
@@ -13,6 +14,15 @@ export interface KoshkoTimelineActor {
 }
 
 export type KoshkoLogEntry = CapturedSignalV1 | CapturedStateMutationV1;
+
+export interface KoshkoStateSnapshot {
+  index: number;
+  label?: string;
+  mutation?: CapturedStateMutationV1;
+  state: JsonObject;
+}
+
+export type KoshkoStateHistorySnapshot = KoshkoStateSnapshot;
 
 export class KoshkoRepository {
   private readonly capturedSignals: CapturedSignalV1[] = [];
@@ -29,9 +39,15 @@ export class KoshkoRepository {
 
   private displayLog: KoshkoLogEntry[] = [];
 
-  private state: JsonObject = {};
+  private stateHistory: KoshkoStateSnapshot[] = [createInitialStateSnapshot()];
+
+  private state: JsonObject = this.stateHistory[0].state;
 
   private displayState: JsonObject = {};
+
+  private displayStateHistory: KoshkoStateSnapshot[] = this.stateHistory;
+
+  private selectedStateSnapshotIndex: number | null = null;
 
   private unreadCount = 0;
 
@@ -59,6 +75,34 @@ export class KoshkoRepository {
 
   getDisplayState(): JsonObject {
     return this.displayState;
+  }
+
+  getStateHistory(): KoshkoStateSnapshot[] {
+    return [...this.stateHistory];
+  }
+
+  getDisplayStateHistory(): KoshkoStateSnapshot[] {
+    return [...this.displayStateHistory];
+  }
+
+  getSelectedStateSnapshotIndex(): number | null {
+    return this.selectedStateSnapshotIndex;
+  }
+
+  selectStateSnapshot(index: number | null): boolean {
+    if (index !== null && !this.displayStateHistory.some((snapshot) => snapshot.index === index)) {
+      return false;
+    }
+
+    if (this.selectedStateSnapshotIndex === index) {
+      return true;
+    }
+
+    this.selectedStateSnapshotIndex = index;
+    this.displayState = this.getSelectedDisplayState();
+    this.bumpDisplayVersion();
+    this.notify();
+    return true;
   }
 
   getUnreadCount(): number {
@@ -90,8 +134,12 @@ export class KoshkoRepository {
     this.capturedLog.length = 0;
     this.displaySignals = [];
     this.displayLog = [];
-    this.state = {};
-    this.displayState = {};
+    const initialStateSnapshot = createInitialStateSnapshot();
+    this.state = initialStateSnapshot.state;
+    this.displayState = initialStateSnapshot.state;
+    this.stateHistory = [initialStateSnapshot];
+    this.displayStateHistory = this.stateHistory;
+    this.selectedStateSnapshotIndex = null;
     this.unreadCount = 0;
     this.topFrameIdentity = undefined;
     this.bumpDisplayVersion();
@@ -111,7 +159,19 @@ export class KoshkoRepository {
     if (isCapturedSignal(captured)) {
       this.capturedSignals.push(captured);
     } else {
-      this.state = applyStateMutationPatch(this.state, captured.mutation.patch);
+      const nextState = applyStateMutationPatch(this.state, captured.mutation.patch);
+      if (nextState !== this.state) {
+        this.state = freezeState(nextState);
+        this.stateHistory = [
+          ...this.stateHistory,
+          freezeSnapshot({
+            index: this.stateHistory.length,
+            label: captured.mutation.label,
+            mutation: cloneCapturedStateMutation(captured),
+            state: this.state,
+          }),
+        ];
+      }
     }
     if (this.paused) {
       this.unreadCount += 1;
@@ -176,8 +236,18 @@ export class KoshkoRepository {
   private syncDisplaySnapshot(): void {
     this.displaySignals = this.getSignals();
     this.displayLog = this.getLog();
-    this.displayState = this.state;
+    this.displayStateHistory = this.stateHistory;
+    this.displayState = this.getSelectedDisplayState();
     this.bumpDisplayVersion();
+  }
+
+  private getSelectedDisplayState(): JsonObject {
+    if (this.selectedStateSnapshotIndex === null) {
+      return this.state;
+    }
+
+    return this.displayStateHistory.find((snapshot) => snapshot.index === this.selectedStateSnapshotIndex)?.state
+      ?? this.state;
   }
 
   private bumpDisplayVersion(): void {
@@ -189,6 +259,70 @@ export class KoshkoRepository {
       listener();
     }
   }
+}
+
+function createInitialStateSnapshot(): KoshkoStateSnapshot {
+  return freezeSnapshot({ index: 0, state: freezeState({}) });
+}
+
+function freezeSnapshot(snapshot: KoshkoStateSnapshot): KoshkoStateSnapshot {
+  return Object.freeze(snapshot);
+}
+
+function freezeState(state: JsonObject): JsonObject {
+  freezeJsonValue(state, new WeakSet<object>());
+  return state;
+}
+
+function cloneCapturedStateMutation(captured: CapturedStateMutationV1): CapturedStateMutationV1 {
+  const snapshot: CapturedStateMutationV1 = {
+    ...captured,
+    mutation: {
+      ...captured.mutation,
+      patch: captured.mutation.patch.map((operation) => (
+        operation.op === 'remove'
+          ? { ...operation }
+          : { ...operation, value: cloneJsonValue(operation.value) }
+      )),
+    },
+  };
+
+  freezeUnknown(snapshot, new WeakSet<object>());
+  return snapshot;
+}
+
+function cloneJsonValue(value: JsonValue): JsonValue {
+  if (Array.isArray(value)) {
+    return value.map(cloneJsonValue);
+  }
+  if (typeof value === 'object' && value !== null) {
+    return Object.fromEntries(Object.entries(value).map(([key, child]) => [key, cloneJsonValue(child)]));
+  }
+  return value;
+}
+
+function freezeJsonValue(value: JsonObject | JsonObject[keyof JsonObject], seen: WeakSet<object>): void {
+  if (typeof value !== 'object' || value === null || seen.has(value)) {
+    return;
+  }
+
+  seen.add(value);
+  for (const child of Object.values(value)) {
+    freezeJsonValue(child, seen);
+  }
+  Object.freeze(value);
+}
+
+function freezeUnknown(value: unknown, seen: WeakSet<object>): void {
+  if (typeof value !== 'object' || value === null || seen.has(value)) {
+    return;
+  }
+
+  seen.add(value);
+  for (const child of Object.values(value)) {
+    freezeUnknown(child, seen);
+  }
+  Object.freeze(value);
 }
 
 function compareCapturedLogEntries(left: KoshkoLogEntry, right: KoshkoLogEntry): number {

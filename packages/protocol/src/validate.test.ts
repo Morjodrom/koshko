@@ -120,6 +120,24 @@ describe('protocol validation', () => {
     })).toBeUndefined();
   });
 
+  it('accepts bounded state mutation labels and rejects malformed labels', () => {
+    const mutation = {
+      protocol: 'koshko',
+      version: 1,
+      id: 'mutation-1',
+      producerId: 'state-demo',
+      producerSequence: 1,
+      occurredAt: 10,
+      label: 'Checkout ready',
+      patch: [],
+    };
+
+    expect(isKoshkoStateMutationV1(mutation)).toBe(true);
+    expect(isKoshkoStateMutationV1({ ...mutation, label: '' })).toBe(false);
+    expect(isKoshkoStateMutationV1({ ...mutation, label: 42 })).toBe(false);
+    expect(isKoshkoStateMutationV1({ ...mutation, label: 'x'.repeat(129) })).toBe(false);
+  });
+
   it('rejects oversized normalized state mutations without invoking getters', () => {
     const oversizedMutation = {
       protocol: 'koshko',

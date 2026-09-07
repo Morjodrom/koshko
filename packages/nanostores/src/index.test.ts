@@ -29,6 +29,7 @@ describe('connectNanoStores', () => {
 
     expect(getMutations(postMessage)).toMatchObject([
       {
+        label: 'Nano Stores initial snapshot',
         patch: [
           {
             op: 'add',
@@ -57,6 +58,7 @@ describe('connectNanoStores', () => {
 
     expect(getMutations(postMessage)).toMatchObject([
       {
+        label: 'Nano Stores counter changed',
         patch: [{
           op: 'add',
           path: '/nanostores',
@@ -67,6 +69,7 @@ describe('connectNanoStores', () => {
         }],
       },
       {
+        label: 'Nano Stores profile.visits changed',
         patch: [{
           op: 'add',
           path: '/nanostores',

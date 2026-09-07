@@ -21,6 +21,7 @@ import { isStateMutationPath } from './state';
 
 const MAX_STATE_PATCH_OPERATIONS = 500;
 const MAX_SERIALIZED_BYTES = 64 * 1024;
+const MAX_IDENTIFIER_CODE_POINTS = 128;
 
 export const koshkoSignalV1JsonSchema = koshkoSignalV1Schema;
 export const koshkoStateMutationV1JsonSchema = koshkoStateMutationV1Schema;
@@ -94,6 +95,7 @@ export function isKoshkoStateMutationV1(value: unknown): value is KoshkoStateMut
   const producerId = readOwnDataProperty(value, 'producerId');
   const producerSequence = readOwnDataProperty(value, 'producerSequence');
   const occurredAt = readOwnDataProperty(value, 'occurredAt');
+  const label = readOwnDataProperty(value, 'label');
   const patch = readOwnDataProperty(value, 'patch');
   const structurallyValid = (
     protocol === 'koshko' &&
@@ -107,6 +109,7 @@ export function isKoshkoStateMutationV1(value: unknown): value is KoshkoStateMut
     producerSequence > 0 &&
     typeof occurredAt === 'number' &&
     Number.isFinite(occurredAt) &&
+    (label === undefined || isBoundedIdentifier(label)) &&
     Array.isArray(patch) &&
     patch.length <= MAX_STATE_PATCH_OPERATIONS &&
     isStatePatch(patch)
@@ -117,6 +120,10 @@ export function isKoshkoStateMutationV1(value: unknown): value is KoshkoStateMut
   }
 
   return hasValidSerializedSize(normalizeKoshkoStateMutationV1(value));
+}
+
+function isBoundedIdentifier(value: unknown): value is string {
+  return typeof value === 'string' && value.length > 0 && Array.from(value).length <= MAX_IDENTIFIER_CODE_POINTS;
 }
 
 export function isKoshkoWindowMessageV1(value: unknown): value is KoshkoWindowMessageV1 {

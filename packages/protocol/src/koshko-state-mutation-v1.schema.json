@@ -37,6 +37,11 @@
     "occurredAt": {
       "type": "number"
     },
+    "label": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
     "patch": {
       "type": "array",
       "maxItems": 500,
