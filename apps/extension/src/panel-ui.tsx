@@ -35,6 +35,7 @@ createRoot(mountTarget).render(
       link.click();
       URL.revokeObjectURL(url);
     }}
+    copyText={(text) => navigator.clipboard.writeText(text)}
   />,
 );
 

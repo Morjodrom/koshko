@@ -7,10 +7,11 @@ Disposable Chrome/Chromium-only prototype for inspecting `koshko` window message
 - Chrome/Chromium only.
 - Capture only explicit `koshko` window messages.
 - Validate and redact payloads before they reach the panel.
-- Show three simple views in DevTools:
+- Show four focused views in DevTools:
   - Timeline
   - Log
   - Global State
+  - AI Log
 - Keep everything in-memory and easy to throw away later.
 - No search, import, analytics, remote code, or production packaging.
 - Local demo is dev-only: two static HTML pages served by Vite.
@@ -72,7 +73,9 @@ WXT will build a dev-only Chrome extension output under
 3. Reload the product tab.
 4. Open DevTools and select **Koshko**.
 5. Trigger the app action that emits `koshko` messages.
-6. Read the Timeline or Log panel.
+6. Read the Timeline or Log panel, or open **AI Log** to copy a compact diagnostic trace into an LLM chat.
+
+The AI Log combines chronological signals, state mutations, and the latest reconstructed state in a prompt-ready text capsule. Choose an approximate 8k, 16k, or 32k token budget to retain the newest coherent suffix, or choose Full log. Token counts are conservative estimates and vary by model. Koshko does not send the trace to a remote service; **Copy for AI** only writes it to the local clipboard.
 
 Important: the extension cannot infer app semantics or discover module-local
 store instances by itself. A real product must emit messages with the shared

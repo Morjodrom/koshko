@@ -2,6 +2,7 @@ import {
   useCallback,
   useEffect,
   useLayoutEffect,
+  useMemo,
   useRef,
   useState,
   type ReactElement,
@@ -27,6 +28,11 @@ import type {
   PanelAccessController,
   PanelAccessSnapshot,
 } from '../browser/panel-access';
+import {
+  formatAiLog,
+  type AiLogBudget,
+  type AiLogResult,
+} from '../ai-log';
 import { BrandLockup, Icon } from './brand';
 import { GlobalStateViewer } from './global-state-viewer';
 import type { ManagedPanelConnection, PanelConnectionStatus } from '../messaging/panel-connection';
@@ -38,6 +44,7 @@ export interface PanelAppProps {
   tabId: number;
   accessController: PanelAccessController;
   downloadJsonl: (jsonl: string) => void;
+  copyText: (text: string) => Promise<void>;
 }
 
 type AccessState =
@@ -55,8 +62,9 @@ export function PanelApp({
   tabId,
   accessController,
   downloadJsonl,
+  copyText,
 }: PanelAppProps): ReactElement {
-  const [activeTab, setActiveTab] = useState<'timeline' | 'log' | 'state'>('timeline');
+  const [activeTab, setActiveTab] = useState<'timeline' | 'log' | 'state' | 'ai'>('timeline');
   const [connectionStatus, setConnectionStatus] = useState<PanelConnectionStatus>(
     connection.status,
   );
@@ -85,6 +93,7 @@ export function PanelApp({
   const [selectedLogTypes, setSelectedLogTypes] = useState<ReadonlySet<LogEntryType>>(
     new Set(['signal']),
   );
+  const [aiLogBudget, setAiLogBudget] = useState<AiLogBudget>('16k');
   const [expandedSignalIds, setExpandedSignalIds] = useState<
     ReadonlySet<string>
   >(new Set());
@@ -270,6 +279,12 @@ export function PanelApp({
     if (!actorFilterActive) return true;
     return isCapturedSignal(entry) && matchesSelectedActor(entry, selectedActorKeys);
   });
+  const latestDisplayState = displayStateHistory.at(-1)?.state ?? displayState;
+  const aiLog = useMemo(() => formatAiLog({
+    entries: displayLog,
+    state: latestDisplayState,
+    budget: aiLogBudget,
+  }), [aiLogBudget, displayLog, latestDisplayState]);
 
   return (
     <main className="shell">
@@ -339,6 +354,14 @@ export function PanelApp({
           <Icon name="graph" className="tab-icon" />
           Global State
         </button>
+        <button
+          className={activeTab === 'ai' ? 'tab active' : 'tab'}
+          aria-pressed={activeTab === 'ai'}
+          onClick={() => setActiveTab('ai')}
+        >
+          <Icon name="ai" className="tab-icon" />
+          AI Log
+        </button>
       </nav>
       <section className="card" data-testid="panel-body">
         {activeTab === 'timeline' ? (
@@ -372,16 +395,117 @@ export function PanelApp({
               });
             }}
           />
-        ) : (
+        ) : activeTab === 'state' ? (
           <GlobalState
             state={displayState}
             history={displayStateHistory}
             selectedIndex={selectedStateSnapshotIndex}
             onSelect={selectStateSnapshot}
           />
+        ) : (
+          <AiLog
+            result={aiLog}
+            budget={aiLogBudget}
+            onBudgetChange={setAiLogBudget}
+            copyText={copyText}
+          />
         )}
       </section>
     </main>
+  );
+}
+
+function AiLog({
+  result,
+  budget,
+  onBudgetChange,
+  copyText,
+}: {
+  result: AiLogResult;
+  budget: AiLogBudget;
+  onBudgetChange: (budget: AiLogBudget) => void;
+  copyText: (text: string) => Promise<void>;
+}): ReactElement {
+  const [copyStatus, setCopyStatus] = useState<'idle' | 'copying' | 'copied' | 'error'>('idle');
+
+  useEffect(() => {
+    setCopyStatus('idle');
+  }, [result.text]);
+
+  const copy = async (): Promise<void> => {
+    setCopyStatus('copying');
+    try {
+      await copyText(result.text);
+      setCopyStatus('copied');
+    } catch {
+      setCopyStatus('error');
+    }
+  };
+  const hasReducedContext = result.omittedEntryCount > 0
+    || result.truncatedValueCount > 0
+    || result.stateStatus === 'omitted';
+
+  return (
+    <div className="ai-log" data-testid="ai-log">
+      <div className="ai-log-header">
+        <div className="ai-log-copy">
+          <h2>Prompt-ready diagnostic trace</h2>
+          <p className="muted">
+            Structured for LLM analysis. Token estimates are conservative and model-dependent.
+          </p>
+        </div>
+        <div className="ai-log-controls">
+          <label className="ai-budget">
+            Context budget
+            <select
+              aria-label="AI log context budget"
+              value={budget}
+              onChange={(event) => onBudgetChange(event.target.value as AiLogBudget)}
+            >
+              <option value="8k">Approx. 8k tokens</option>
+              <option value="16k">Approx. 16k tokens</option>
+              <option value="32k">Approx. 32k tokens</option>
+              <option value="full">Full log</option>
+            </select>
+          </label>
+          <button
+            type="button"
+            className="primary"
+            disabled={copyStatus === 'copying'}
+            onClick={() => void copy()}
+          >
+            <Icon name="copy" className="button-icon" />
+            {copyStatus === 'copying' ? 'Copying…' : 'Copy for AI'}
+          </button>
+        </div>
+      </div>
+      <div className="ai-log-summary" role="status">
+        <span>~{result.estimatedTokens.toLocaleString()} tokens</span>
+        <span>{result.includedEntryCount} of {result.includedEntryCount + result.omittedEntryCount} entries</span>
+        <span>State: {result.stateStatus}</span>
+      </div>
+      {hasReducedContext ? (
+        <p className="ai-log-warning" data-testid="ai-log-warning">
+          Context reduced: {result.omittedEntryCount} oldest entries omitted, {result.truncatedValueCount} oversized values truncated
+          {result.stateStatus === 'omitted' ? ', and current state omitted' : ''}.
+        </p>
+      ) : null}
+      <textarea
+        className="ai-log-preview"
+        aria-label="AI-ready Koshko log"
+        readOnly
+        spellCheck={false}
+        value={result.text}
+      />
+      <p
+        className={copyStatus === 'error' ? 'ai-copy-status error' : 'ai-copy-status'}
+        role={copyStatus === 'error' ? 'alert' : 'status'}
+        aria-live="polite"
+      >
+        {copyStatus === 'copied' ? 'Copied AI-ready log.' : null}
+        {copyStatus === 'error' ? 'Clipboard access failed. Select and copy the text manually.' : null}
+      </p>
+    </div>
   );
 }
 

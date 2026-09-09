@@ -1,8 +1,10 @@
 import type { ReactElement, SVGProps } from 'react';
 
 type IconName =
+  | 'ai'
   | 'activity'
   | 'clock'
+  | 'copy'
   | 'download'
   | 'graph'
   | 'pause'
@@ -25,8 +27,10 @@ export function Icon({ name, ...props }: IconProps): ReactElement {
   };
 
   const paths: Record<IconName, ReactElement> = {
+    ai: <><path {...common} d="M9 4h6M12 2v2M6 7h12a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2Z" /><circle cx="9" cy="12" r="1" fill="currentColor" /><circle cx="15" cy="12" r="1" fill="currentColor" /><path {...common} d="M9 16h6M2 11h2m16 0h2" /></>,
     activity: <><path {...common} d="M3 12h3l2-7 4 14 2-7h7" /></>,
     clock: <><circle {...common} cx="12" cy="12" r="8.5" /><path {...common} d="M12 7v5l3.5 2" /></>,
+    copy: <><rect {...common} x="8" y="8" width="11" height="12" rx="2" /><path {...common} d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h2" /></>,
     download: <><path {...common} d="M12 3v11m0 0 4-4m-4 4-4-4M4 20h16" /></>,
     graph: <><path {...common} d="M5 19V9m7 10V5m7 14v-7M3 19h18" /><circle {...common} cx="5" cy="9" r="1.5" fill="currentColor" /><circle {...common} cx="12" cy="5" r="1.5" fill="currentColor" /><circle {...common} cx="19" cy="12" r="1.5" fill="currentColor" /></>,
     pause: <><path {...common} d="M8 5v14M16 5v14" /></>,

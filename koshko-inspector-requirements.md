@@ -46,6 +46,7 @@ on that example, Vue, React, Svelte, Nano Stores, or a particular application pr
 - A dedicated Chrome DevTools panel.
 - Actor sequence timeline view.
 - Chronological plain log view.
+- AI-optimized textual log view with local clipboard copy and bounded context presets.
 - Expandable structured details.
 - Filtering, search, pause/follow, clear, and JSONL export.
 - A framework-neutral TypeScript emitter and runtime protocol validator.
@@ -103,6 +104,7 @@ flowchart LR
     router --> repository[Panel signal repository]
     repository --> timeline[Actor timeline]
     repository --> logs[Plain log]
+    repository --> ai[AI-optimized log]
     repository --> future[Future representations]
 ```
 

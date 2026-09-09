@@ -134,11 +134,13 @@ function mountPanel(accessController = createAccessController()): {
   port: FakePanelConnection;
   repository: KoshkoRepository;
   downloadJsonl: ReturnType<typeof vi.fn>;
+  copyText: ReturnType<typeof vi.fn>;
   unmount: () => void;
 } {
   const port = new FakePanelConnection();
   const repository = new KoshkoRepository();
   const downloadJsonl = vi.fn();
+  const copyText = vi.fn().mockResolvedValue(undefined);
   const { unmount } = render(
     <PanelApp
       repository={repository}
@@ -146,10 +148,11 @@ function mountPanel(accessController = createAccessController()): {
       tabId={17}
       accessController={accessController}
       downloadJsonl={downloadJsonl}
+      copyText={copyText}
     />,
   );
 
-  return { port, repository, downloadJsonl, unmount };
+  return { port, repository, downloadJsonl, copyText, unmount };
 }
 
 function expandGlobalState(): HTMLElement {
@@ -863,6 +866,58 @@ describe('PanelApp', () => {
     );
     expect(repository.getDisplayState()).toEqual({ ready: false });
     expect(stateTree.textContent).toContain('ready:false');
+  });
+
+  it('builds a live AI-ready log with a persistent budget and copies the exact preview', async () => {
+    const { port, copyText } = mountPanel();
+    fireEvent.click(screen.getByRole('button', { name: 'AI Log' }));
+
+    const budget = screen.getByRole('combobox', { name: 'AI log context budget' }) as HTMLSelectElement;
+    const preview = screen.getByRole('textbox', { name: 'AI-ready Koshko log' }) as HTMLTextAreaElement;
+    expect(budget.value).toBe('16k');
+    expect(preview.value).toContain('"capturedEntries":0');
+
+    act(() => port.emitCapture(captured()));
+    expect(preview.value).toContain('"id":"signal-1"');
+
+    fireEvent.click(screen.getByTestId('pause-button'));
+    act(() => port.emitCapture(captured({
+      signal: {
+        ...captured().signal,
+        id: 'buffered-ai',
+        producerSequence: 2,
+        name: 'host.buffered-ai',
+      },
+    })));
+    expect(preview.value).not.toContain('buffered-ai');
+
+    fireEvent.click(screen.getByTestId('pause-button'));
+    expect(preview.value).toContain('buffered-ai');
+    fireEvent.change(budget, { target: { value: '8k' } });
+    expect(budget.value).toBe('8k');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Timeline' }));
+    fireEvent.click(screen.getByRole('button', { name: 'AI Log' }));
+    expect((screen.getByRole('combobox', { name: 'AI log context budget' }) as HTMLSelectElement).value).toBe('8k');
+
+    const currentPreview = (screen.getByRole('textbox', { name: 'AI-ready Koshko log' }) as HTMLTextAreaElement).value;
+    fireEvent.click(screen.getByRole('button', { name: 'Copy for AI' }));
+
+    await waitFor(() => expect(copyText).toHaveBeenCalledWith(currentPreview));
+    expect(screen.getByText('Copied AI-ready log.')).toBeTruthy();
+  });
+
+  it('keeps the AI log selectable when clipboard access fails', async () => {
+    const mounted = mountPanel();
+    mounted.copyText.mockRejectedValueOnce(new Error('clipboard unavailable'));
+    fireEvent.click(screen.getByRole('button', { name: 'AI Log' }));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Copy for AI' }));
+
+    expect((await screen.findByRole('alert')).textContent).toContain(
+      'Clipboard access failed. Select and copy the text manually.',
+    );
+    expect((screen.getByRole('textbox', { name: 'AI-ready Koshko log' }) as HTMLTextAreaElement).readOnly).toBe(true);
   });
 
   it('unsubscribes from the port on unmount', () => {

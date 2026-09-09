@@ -129,7 +129,7 @@ The calls return a normalized `KoshkoSignalV1`. Capturing a returned signal is u
 
 ## Global state mutations
 
-The **Global State** panel tab reconstructs one framework-neutral JSON object. It is separate from semantic signals: state mutations do not appear in the Timeline or Log and are not included in signal JSONL exports.
+The **Global State** panel tab reconstructs one framework-neutral JSON object. State mutations remain separate from semantic signals: they do not appear in the Timeline or signal JSONL export, but can be enabled in the combined Log and are included in AI Log context.
 
 Create one long-lived state emitter per JavaScript execution context that publishes state changes. As with actor emitters, create and call it only inside a compile-time development branch:
 
@@ -234,7 +234,7 @@ Cross-origin application messaging remains subject to the browser's normal secur
    ```
 3. Open the extension **Options** page. Add and grant the host origin and every iframe origin you will inspect.
 4. Reload the target tab, open DevTools, and select the **Koshko** panel.
-5. Trigger the instrumented action. Check that the Timeline shows the source actor, and that directed events show the intended target. Check the Log/details view for the event name, correlation ID, tags, and safe details. If the application emits state mutations, open **Global State** and verify the reconstructed JSON value.
+5. Trigger the instrumented action. Check that the Timeline shows the source actor, and that directed events show the intended target. Check the Log/details view for the event name, correlation ID, tags, and safe details. If the application emits state mutations, open **Global State** and verify the reconstructed JSON value. To ask an LLM for help, open **AI Log**, select a context budget, and use **Copy for AI**. The generated capsule stays local until you paste it elsewhere and may contain all captured diagnostic data, so review it before sharing.
 
 For a local smoke test of the prototype, run `npm run dev:demo`, grant `http://127.0.0.1:5173`, reload the demo, and open the Koshko panel. The scenario buttons exercise top-level and iframe signals. The dedicated **Add global state**, **Replace global state value**, and **Remove global state value** buttons exercise direct state mutations; use Add before Replace or Remove, then inspect the **Global State** tab.
 
