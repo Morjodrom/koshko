@@ -1,6 +1,6 @@
-# Integrating a TypeScript web app with Koshko Dev Tools
+# Integrating a TypeScript web app with Koshko Inspector
 
-Koshko Dev Tools observes **explicit semantic signals** from an inspected browser tab. It does not infer application meaning from arbitrary browser traffic, console output, network requests, or framework state. Add small, development-only calls at the points where your application knows what happened.
+Koshko Inspector observes **explicit semantic signals** from an inspected browser tab. It does not infer application meaning from arbitrary browser traffic, console output, network requests, or framework state. Add small, development-only calls at the points where your application knows what happened.
 
 This guide is for a browser-based TypeScript application, SDK, or widget. The page-side API emits the version-1 `koshko` protocol using `window.postMessage` internally. **Application code must not construct or post Koshko window messages itself.** Use the emitter API below.
 

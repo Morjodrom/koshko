@@ -71,7 +71,7 @@ export function BrandLockup({ compact = false }: { compact?: boolean }): ReactEl
       <KoshkoMark className="brand-mark" />
       <span>
         <strong>Koshko</strong>
-        <small>Dev Tools</small>
+        <small>Inspector</small>
       </span>
     </div>
   );

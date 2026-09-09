@@ -1,11 +1,11 @@
-# Koshko Dev Tools: Technical Requirements
+# Koshko Inspector: Technical Requirements
 
 Status: draft  
 Intended use: starting point for product design, implementation planning, and task decomposition
 
 ## 1. Purpose
 
-Koshko Dev Tools is an open-source browser extension for inspecting structured koshko signals emitted by
+Koshko Inspector is an open-source browser extension for inspecting structured koshko signals emitted by
 applications running in a browser tab and its frames.
 
 The tool must help a developer answer:
@@ -127,7 +127,7 @@ plain TypeScript.
 The preferred open-source layout is:
 
 ```text
-koshko-devtools/
+koshko-inspector/
 ├── apps/
 │   └── extension/             # WXT MV3 extension and React panel
 ├── packages/
@@ -259,7 +259,7 @@ if (__DEV__) {
 - No browser-extension ID appears in application code.
 - The emitter does not test whether the extension is installed.
 - Posting without a listener is safe and has no application-visible result.
-- The transport is distinct from the application's iframe protocol; koshko dev tools messages are not
+- The transport is distinct from the application's iframe protocol; koshko inspector messages are not
   sent from a merchant window to a widget window or vice versa.
 - Content scripts listen in each frame independently with `event.source === window`.
 
@@ -270,7 +270,7 @@ For production modules such as SDKs and widgets:
 - Call sites must use an existing compile-time development constant, for example `if (__DEV__)`.
 - The emitter package must have no top-level side effects.
 - Production bundlers must be able to remove event construction and emitter imports.
-- Production artifact tests must assert that the koshko dev tools channel marker is absent.
+- Production artifact tests must assert that the koshko inspector channel marker is absent.
 - A no-op runtime emitter alone is insufficient because argument construction and debug strings
   may remain in the bundle.
 
@@ -476,7 +476,7 @@ Potential views:
 - State snapshot/diff view.
 - Network correlation view.
 
-Adapters and future views consume the koshko dev tools protocol. They must not become the canonical
+Adapters and future views consume the koshko inspector protocol. They must not become the canonical
 transport.
 
 ## 18. Performance requirements
@@ -597,7 +597,7 @@ The first stable release is complete when:
 6. Invalid or excessive input is rejected or safely truncated without affecting the page.
 7. Sensitive values are redacted before display and export.
 8. The extension makes no network requests and requires no backend.
-9. Production example bundles contain no koshko dev tools debug implementation or markers.
+9. Production example bundles contain no koshko inspector debug implementation or markers.
 10. A developer can add a new representation without changing instrumentation or transport.
 11. Automated tests cover top page, multiple cross-origin frames, navigation, permissions, and
   service-worker reconnection.
@@ -615,7 +615,7 @@ The first stable release is complete when:
 - [Chrome extension messaging](https://developer.chrome.com/docs/extensions/develop/concepts/messaging):
   communication between content scripts, service workers, and extension pages.
 - [Vue DevTools plugin API](https://devtools.vuejs.org/plugins/api): reference for adapter-oriented
-  library integration, not the canonical koshko dev tools transport.
+  library integration, not the canonical koshko inspector transport.
 - [Redux DevTools](https://github.com/reduxjs/redux-devtools): optional action-log adapter and
   prototype target.
 - [OpenTelemetry JavaScript](https://opentelemetry.io/docs/languages/js/): potential future bridge

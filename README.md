@@ -1,4 +1,4 @@
-# Koshko Dev Tools prototype
+# Koshko Inspector prototype
 
 Disposable Chrome/Chromium-only prototype for inspecting `koshko` window messages emitted by instrumented pages.
 

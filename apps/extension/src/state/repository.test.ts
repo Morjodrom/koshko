@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { KoshkoRepository, actorKey, formatDateTime, getActorColumns } from './repository';
 
-describe('koshko dev tools repository', () => {
+describe('koshko inspector repository', () => {
   it('notifies subscribers exactly once for active, paused, and navigation records', () => {
     const repo = new KoshkoRepository();
     let notifications = 0;

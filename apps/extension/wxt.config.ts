@@ -5,7 +5,7 @@ export default defineConfig({
   modules: ['@wxt-dev/module-react'],
   outDir: '.output/chrome-mv3-dev',
   manifest: {
-    name: 'Koshko Dev Tools',
+    name: 'Koshko Inspector',
     version: extensionPackage.version,
     description: 'Disposable Chrome DevTools prototype for koshko signals.',
     permissions: ['activeTab', 'scripting', 'storage'],

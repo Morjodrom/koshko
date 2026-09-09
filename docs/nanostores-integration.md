@@ -1,7 +1,7 @@
 # Integrating a Nano Stores application with Koshko
 
 `@koshko/nanostores` publishes selected Nano Stores to the **Global State** tab
-in Koshko Dev Tools. The bridge sends an initial snapshot and refreshes it after
+in Koshko Inspector. The bridge sends an initial snapshot and refreshes it after
 each store notification. It does not change application state and does not add
 entries to Koshko's Timeline or Log views.
 
@@ -110,7 +110,7 @@ to prevent one frame from replacing another frame's snapshot.
 2. Open its Options page and grant the application origin. Grant iframe origins
    separately when cross-origin frames also publish state.
 3. Reload the application after granting permission.
-4. Open browser DevTools and select **Koshko Dev Tools**.
+4. Open browser DevTools and select **Koshko Inspector**.
 5. Open **Global State** and mutate one of the registered stores.
 
 The initial snapshot is emitted when `connectNanoStores` runs. If DevTools is

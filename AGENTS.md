@@ -8,7 +8,7 @@ This is an npm-workspaces TypeScript prototype. Keep shared behavior in `package
 - `packages/protocol/` owns signal types, validation, and normalization.
 - `packages/emitter/` exposes the page-side `koshko` emitter.
 - `examples/neutral-demo/` is the Vite test page used for manual extension checks.
-- `koshko-devtools-requirements.md` records requirements. Do not commit generated `.output/`, `.wxt/`, `dist/`, or `coverage/` directories.
+- `koshko-inspector-requirements.md` records requirements. Do not commit generated `.output/`, `.wxt/`, `dist/`, or `coverage/` directories.
 
 ## Build, Test, and Development Commands
 
@@ -24,7 +24,7 @@ For a focused check, use `npm test --workspace=@koshko/protocol`.
 
 ## Versioning
 
-The canonical Koshko Dev Tools version is the `version` field in
+The canonical Koshko Inspector version is the `version` field in
 `apps/extension/package.json`; WXT exposes it in the extension manifest. Before
 every commit, increment this version, including commits that only change tests,
 documentation, or project metadata, and keep `package-lock.json` synchronized.

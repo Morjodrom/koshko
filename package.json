@@ -1,5 +1,5 @@
 {
-  "name": "koshko-devtools-prototype",
+  "name": "koshko-inspector-prototype",
   "private": true,
   "workspaces": [
     "apps/*",

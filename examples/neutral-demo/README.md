@@ -1,6 +1,6 @@
 # Neutral demo
 
-Development-only, local Vite fixture for manual Koshko Dev Tools checks and scenario regression tests.
+Development-only, local Vite fixture for manual Koshko Inspector checks and scenario regression tests.
 
 ## Run
 
@@ -54,6 +54,6 @@ Use the **Nano Stores** controls to mutate them. Their local values are shown on
 5. Select `apps/extension/.output/chrome-mv3-dev/chrome-mv3`.
 6. Open the extension's **Options** page and grant `http://127.0.0.1:5173`.
 7. Open or reload the demo at `http://127.0.0.1:5173`.
-8. Open Chrome DevTools, select **Koshko Dev Tools**, then run each scenario.
+8. Open Chrome DevTools, select **Koshko Inspector**, then run each scenario.
 
 No production build is provided and no data leaves the browser.
