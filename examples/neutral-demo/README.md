@@ -28,7 +28,8 @@ Generating it again replaces only `largeFixture`; the other demo state remains.
 
 ## Nano Stores bridge
 
-The page also registers two Nano Stores with `@koshko/nanostores` at startup:
+The page also registers two Nano Stores with `@koshko/nanostores` during
+development:
 
 - `counter` is an atom with increment and reset actions;
 - `profile` is a map with name and visit-count mutations.
@@ -44,6 +45,12 @@ Use the **Nano Stores** controls to mutate them. Their local values are shown on
   }
 }
 ```
+
+The optional bridge and console logger live in `src/devtools.ts`. The main
+entry dynamically imports that module behind `import.meta.env.DEV`, mirroring
+the recommended integration pattern for real products. Both packages are
+development dependencies; `nanostores` remains the application's ordinary
+runtime dependency.
 
 ## Install in Google Chrome or Chromium-based browsers
 

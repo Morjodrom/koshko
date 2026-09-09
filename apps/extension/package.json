@@ -1,6 +1,6 @@
 {
   "name": "@koshko/extension",
-  "version": "0.2.5",
+  "version": "0.2.6",
   "private": true,
   "type": "module",
   "scripts": {
@@ -9,7 +9,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "@koshko/protocol": "file:../../packages/protocol",
+    "@koshko/protocol": "^0.1.0",
     "@xyflow/react": "^12.11.6",
     "json-edit-react": "^1.30.2",
     "react": "^19.2.0",

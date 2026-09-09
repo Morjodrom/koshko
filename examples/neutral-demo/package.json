@@ -8,13 +8,13 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@koshko/emitter": "file:../../packages/emitter",
-    "@koshko/nanostores": "file:../../packages/nanostores",
-    "@koshko/protocol": "file:../../packages/protocol",
-    "@nanostores/logger": "^1.1.0",
+    "@koshko/emitter": "^0.1.0",
+    "@koshko/protocol": "^0.1.0",
     "nanostores": "^1.5.3"
   },
   "devDependencies": {
+    "@koshko/nanostores": "^0.1.0",
+    "@nanostores/logger": "^1.1.0",
     "typescript": "^5.7.3",
     "vite": "^6.1.0"
   }

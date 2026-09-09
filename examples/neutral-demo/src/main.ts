@@ -1,6 +1,4 @@
 import { createActorEmitter, createStateEmitter } from '@koshko/emitter';
-import { connectNanoStores } from '@koshko/nanostores';
-import { logger } from '@nanostores/logger';
 import type { KoshkoSignalV1 } from '@koshko/protocol';
 import { generateLargeState } from './large-state';
 import {
@@ -33,25 +31,19 @@ const frames = new Map<FrameCommand['instance'], HTMLIFrameElement>([
   ['processing', document.querySelector<HTMLIFrameElement>('#frame-processing')!],
 ]);
 const events: string[] = [];
-const disconnectNanoStores = connectNanoStores({
-  counter: $counter,
-  profile: $profile,
-});
-const disconnectNanoStoresLogger = logger({
-  counter: $counter,
-  profile: $profile,
-});
-
 renderStatus('Ready. Choose a repeatable scenario. Each run receives a new correlation ID.');
 wireWindow();
 wireScenarioButtons();
 wireStateMutationButtons();
 wireLargeStateControls();
 wireNanoStoresControls();
-window.addEventListener('pagehide', () => {
-  disconnectNanoStores();
-  disconnectNanoStoresLogger();
-}, { once: true });
+if (import.meta.env.DEV) {
+  void import('./devtools').then(({ startDevtools }) => {
+    const disconnectDevtools = startDevtools();
+    import.meta.hot?.dispose(disconnectDevtools);
+    window.addEventListener('pagehide', disconnectDevtools, { once: true });
+  });
+}
 $counter.subscribe(renderNanoStoresValue);
 $profile.subscribe(renderNanoStoresValue);
 renderLog();

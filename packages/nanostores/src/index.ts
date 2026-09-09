@@ -1,10 +1,26 @@
 import { createStateEmitter, type StateEmitter } from '@koshko/emitter';
-import { onNotify, type AnyStore, type Store } from 'nanostores';
 
 const DEFAULT_NAMESPACE = 'nanostores';
 const DEFAULT_PRODUCER_ID = 'nanostores';
 
-export type NanoStores = Readonly<Record<string, AnyStore>>;
+/**
+ * The public subset of a Nano Store used by the bridge.
+ *
+ * Keeping this contract structural prevents the integration package from
+ * loading, bundling, or version-locking the application's Nano Stores runtime.
+ */
+export interface NanoStore {
+  get(): unknown;
+  listen(
+    listener: (
+      value: unknown,
+      oldValue?: unknown,
+      changedKey?: PropertyKey,
+    ) => void,
+  ): () => void;
+}
+
+export type NanoStores = Readonly<Record<string, NanoStore>>;
 
 export interface ConnectNanoStoresOptions {
   /** Root key under which registered Nano Stores are exposed in Koshko Global State. */
@@ -14,9 +30,9 @@ export interface ConnectNanoStoresOptions {
 }
 
 /**
- * Publishes Nano Stores values to Koshko Global State through Nano Stores
- * notification hooks. Call the returned function to detach all
- * bridge hooks. Console logging remains independently controlled by callers.
+ * Publishes Nano Stores values to Koshko Global State through each store's
+ * public listener API. Call the returned function to detach all listeners.
+ * Console logging remains independently controlled by callers.
  */
 export function connectNanoStores(
   stores: NanoStores,
@@ -30,14 +46,19 @@ export function connectNanoStores(
 
   emitSnapshot(emitter, namespacePath, stores, 'Nano Stores initial snapshot');
 
-  const bridgeCleanups = Object.entries(stores).map(([storeName, store]) => onNotify(
-    store as Store,
-    ({ changed }) => {
-      emitSnapshot(emitter, namespacePath, stores, createChangeLabel(storeName, changed));
+  const bridgeCleanups = Object.entries(stores).map(([storeName, store]) => store.listen(
+    (_value, _oldValue, changedKey) => {
+      emitSnapshot(emitter, namespacePath, stores, createChangeLabel(storeName, changedKey));
     },
   ));
+  let connected = true;
 
   return () => {
+    if (!connected) {
+      return;
+    }
+    connected = false;
+
     for (const cleanup of bridgeCleanups) {
       cleanup();
     }

@@ -1,45 +1,77 @@
-# Koshko Nano Stores bridge
+# Koshko Nano Stores adapter
 
-`@koshko/nanostores` publishes selected [Nano Stores](https://github.com/nanostores/nanostores)
-values to the Koshko **Global State** view. The bridge observes Nano Stores
-notifications and never writes to the browser console or owns action hooks.
+`@koshko/nanostores` is an optional development adapter that publishes selected
+[Nano Stores](https://github.com/nanostores/nanostores) values to Koshko
+Inspector's **Global State** view. It observes stores through their public
+`get()` and `listen()` methods. It does not import or bundle a Nano Stores
+runtime, write to the browser console, or own action hooks.
+
 Direct writes and mutations wrapped in `action()` are both observed.
+Because observation uses `listen()`, registered stores remain mounted until the
+returned cleanup function is called. This can start effects configured through
+Nano Stores lifecycle hooks, so register only stores that should be active
+during inspection.
+
+## Install
+
+Install the adapter as a development dependency. The application remains the
+owner of its Nano Stores version; the adapter does not install another copy.
+
+```bash
+npm install --save-dev @koshko/nanostores
+```
+
+Development dependencies must be present while the frontend is built. They can
+be omitted from the final deployed image after static assets are produced.
+
+During the tarball pilot, install the complete local package chain as described
+in [`docs/package-distribution.md`](../../docs/package-distribution.md). After
+registry publication, installing `@koshko/nanostores` alone will bring in the
+emitter and protocol transitively.
+
+## Development-only entry
+
+Keep instrumentation in a dedicated module:
 
 ```ts
+// src/devtools/koshko.ts
 import { connectNanoStores } from '@koshko/nanostores';
-import { atom, map } from 'nanostores';
+import { $counter, $profile } from '../stores';
 
-const $counter = atom(0);
-const $profile = map({ name: 'Ada' });
-
-const disconnect = connectNanoStores({
-  counter: $counter,
-  profile: $profile,
-});
-
-// Later, when the instrumentation is no longer needed:
-disconnect();
+export function startKoshko(): () => void {
+  return connectNanoStores({
+    counter: $counter,
+    profile: $profile,
+  });
+}
 ```
 
-Console logging is an independent, optional concern. If the application wants
-the standard [`@nanostores/logger`](https://github.com/nanostores/logger) output,
-configure it separately. Either cleanup function can be called independently:
+Load that module behind the bundler's compile-time development flag:
 
 ```ts
-import { logger } from '@nanostores/logger';
+if (import.meta.env.DEV) {
+  void import('./devtools/koshko').then(({ startKoshko }) => {
+    const disconnect = startKoshko();
 
-const disconnectKoshko = connectNanoStores({ counter: $counter });
-const disconnectLogger = logger({ counter: $counter });
-
-disconnectKoshko();
-disconnectLogger();
+    import.meta.hot?.dispose(disconnect);
+    window.addEventListener('pagehide', disconnect, { once: true });
+  });
+}
 ```
+
+For Vite, `import.meta.env.DEV` is replaced at build time, allowing the dynamic
+module and adapter to be removed from production output. Use the equivalent
+compile-time constant or a development-only entry with other bundlers. A
+`devDependency` classification alone does not make a static import
+development-only.
+
+## State shape and options
 
 The initial snapshot is emitted immediately. Every later change emits a fresh
-grouped snapshot as an `add` operation. This makes updates self-healing when the
-DevTools panel was opened after the initial page message and therefore missed
-it. By default the values are grouped under `nanostores`, producing state shaped
-like:
+grouped snapshot as an `add` operation. Complete snapshots recover when the
+DevTools panel opens after the initial page message and misses it.
+
+By default values are grouped under `nanostores`:
 
 ```json
 {
@@ -62,6 +94,22 @@ connectNanoStores(
 
 The namespace is escaped as a JSON Pointer segment, while store names remain
 ordinary object keys. Values go through the normal Koshko state emitter,
-including its normalization, redaction, size limits, and safe transport
-behavior. Action names, arguments, and lifecycle metadata are intentionally not
-forwarded to Koshko.
+including normalization, redaction, size limits, and safe transport. Action
+names, arguments, and lifecycle metadata are intentionally not forwarded.
+
+Console logging is independent. Applications that want the standard
+`@nanostores/logger` output can configure and clean it up separately.
+
+## Why this is not embedded in the extension
+
+Nano Store instances are ordinary objects kept in the application's module
+graph. An extension cannot enumerate them, and importing Nano Stores inside the
+extension would create a separate module instance. Explicit registration is
+therefore still required even if the adapter implementation were shipped in
+the extension.
+
+Keeping the adapter separate avoids extension bundle growth, state-library
+version coupling, page-world globals, injection races, and exposing live store
+references on `window`. See
+[`docs/integrations.md`](../../docs/integrations.md) for the policy used by
+other state-library adapters.

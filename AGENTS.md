@@ -7,6 +7,7 @@ This is an npm-workspaces TypeScript prototype. Keep shared behavior in `package
 - `apps/extension/` contains the WXT Manifest V3 extension. Browser entry points live in `entrypoints/`; implementation, UI, styles, and tests live in `src/`.
 - `packages/protocol/` owns signal types, validation, and normalization.
 - `packages/emitter/` exposes the page-side `koshko` emitter.
+- `packages/nanostores/` is the optional development-only Nano Stores adapter.
 - `examples/neutral-demo/` is the Vite test page used for manual extension checks.
 - `koshko-inspector-requirements.md` records requirements. Do not commit generated `.output/`, `.wxt/`, `dist/`, or `coverage/` directories.
 
@@ -17,6 +18,8 @@ Run commands from the repository root:
 - `npm ci` installs the exact dependency versions from `package-lock.json`.
 - `npm run dev:demo` serves the demo at `http://127.0.0.1:5173`.
 - `npm run dev:extension` starts WXT and writes the unpacked Chrome extension under `apps/extension/.output/chrome-mv3-dev/chrome-mv3/`.
+- `npm run build:packages` builds the protocol, emitter, and Nano Stores packages in dependency order.
+- `npm run pack:packages` builds those packages and writes pilot tarballs under `artifacts/`.
 - `npm test` runs every workspace's Vitest suite.
 - `npm run typecheck` runs strict TypeScript checks across workspaces without emitting files.
 

@@ -19,6 +19,33 @@ afterEach(() => {
 });
 
 describe('connectNanoStores', () => {
+  it('works with the structural store contract and cleans up once', () => {
+    const postMessage = vi.fn();
+    vi.stubGlobal('window', { postMessage });
+    const cleanup = vi.fn();
+    let listener: ((value: unknown, oldValue?: unknown, changedKey?: PropertyKey) => void) | undefined;
+    let value = 1;
+    const store = {
+      get: (): unknown => value,
+      listen: (nextListener: typeof listener): (() => void) => {
+        listener = nextListener;
+        return cleanup;
+      },
+    };
+
+    const disconnect = connectNanoStores({ counter: store });
+    postMessage.mockClear();
+    value = 2;
+    listener?.(2, 1);
+    disconnect();
+    disconnect();
+
+    expect(getMutations(postMessage)).toMatchObject([{
+      patch: [{ op: 'add', path: '/nanostores', value: { counter: 2 } }],
+    }]);
+    expect(cleanup).toHaveBeenCalledTimes(1);
+  });
+
   it('publishes an initial grouped snapshot for atom and map stores', () => {
     const postMessage = vi.fn();
     vi.stubGlobal('window', { postMessage });

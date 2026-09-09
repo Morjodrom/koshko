@@ -1,22 +1,34 @@
 {
   "name": "@koshko/nanostores",
+  "version": "0.1.0",
   "private": true,
   "type": "module",
-  "main": "./src/index.ts",
-  "module": "./src/index.ts",
+  "license": "MIT",
+  "sideEffects": false,
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist",
+    "README.md"
+  ],
   "exports": {
-    ".": "./src/index.ts",
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
     "./package.json": "./package.json"
   },
   "scripts": {
+    "build": "tsup src/index.ts --format esm --dts --sourcemap --clean --external @koshko/emitter",
     "test": "vitest run",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "@koshko/emitter": "file:../emitter",
-    "nanostores": "^1.5.3"
+    "@koshko/emitter": "^0.1.0"
   },
   "devDependencies": {
-    "@nanostores/logger": "^1.1.0"
+    "@nanostores/logger": "^1.1.0",
+    "nanostores": "^1.5.3"
   }
 }

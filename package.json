@@ -7,10 +7,13 @@
     "examples/*"
   ],
   "scripts": {
-    "dev:extension": "npm run dev --workspace=@koshko/extension",
-    "dev:demo": "npm run dev --workspace=@koshko/neutral-demo",
-    "test": "npm run test --workspaces --if-present",
-    "typecheck": "npm run typecheck --workspaces --if-present"
+    "dev:extension": "npm run build:packages && npm run dev --workspace=@koshko/extension",
+    "dev:demo": "npm run build:packages && npm run dev --workspace=@koshko/neutral-demo",
+    "build:packages": "npm run build --workspace=@koshko/protocol && npm run build --workspace=@koshko/emitter && npm run build --workspace=@koshko/nanostores",
+    "pack:packages": "npm run build:packages && mkdir -p artifacts && npm pack --workspace=@koshko/protocol --workspace=@koshko/emitter --workspace=@koshko/nanostores --pack-destination artifacts",
+    "prepare": "npm run build:packages",
+    "test": "npm run build:packages && npm run test --workspaces --if-present",
+    "typecheck": "npm run build:packages && npm run typecheck --workspaces --if-present"
   },
   "devDependencies": {
     "@types/chrome": "^0.0.289",
@@ -20,6 +23,7 @@
     "@types/react-dom": "^19.2.2",
     "@wxt-dev/module-react": "1.0.0",
     "happy-dom": "^20.14.0",
+    "tsup": "^8.5.0",
     "typescript": "^5.7.3",
     "vite": "^6.1.0",
     "vitest": "^3.0.5",

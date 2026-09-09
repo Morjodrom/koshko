@@ -21,7 +21,14 @@ Disposable Chrome/Chromium-only prototype for inspecting `koshko` window message
 - `examples/neutral-demo/` — minimal Vite demo with two pages
 - `packages/protocol/` — protocol validation and normalization
 - `packages/emitter/` — tiny page-side emitter helper
-- `packages/nanostores/` — Nano Stores state bridge for Global State
+- `packages/nanostores/` — optional, development-only Nano Stores adapter
+
+The extension depends only on `packages/protocol/`. State-library adapters stay
+in separate packages so adding support for another state manager does not grow
+the extension or couple its release cycle to that library. See
+[`docs/integrations.md`](docs/integrations.md) for the integration architecture
+and consumer setup. Tarball maintainers should also follow
+[`docs/package-distribution.md`](docs/package-distribution.md).
 
 ## Run locally
 
@@ -67,7 +74,10 @@ WXT will build a dev-only Chrome extension output under
 5. Trigger the app action that emits `koshko` messages.
 6. Read the Timeline or Log panel.
 
-Important: the extension cannot infer app semantics by itself. A real product must emit messages with the shared `@koshko/emitter` helper, or register Nano Stores with `@koshko/nanostores` when that state manager is used.
+Important: the extension cannot infer app semantics or discover module-local
+store instances by itself. A real product must emit messages with the shared
+`@koshko/emitter` helper, or explicitly register selected Nano Stores with the
+development-only `@koshko/nanostores` adapter.
 
 ## Notes
 
