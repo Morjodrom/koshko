@@ -7,7 +7,11 @@ import {
   waitFor,
   within,
 } from '@testing-library/react';
-import type { CapturedSignalV1, CapturedStateMutationV1 } from '@koshko/protocol';
+import type {
+  CapturedErrorV1,
+  CapturedSignalV1,
+  CapturedStateMutationV1,
+} from '@koshko/protocol';
 import type { PanelCaptureMessage } from '../messaging/messages';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { PanelApp } from './panel-app';
@@ -41,6 +45,12 @@ class FakePanelConnection implements ManagedPanelConnection {
   emitCapture(captured: CapturedSignalV1): void {
     for (const listener of this.messageListeners) {
       listener({ type: PANEL_MESSAGE_CAPTURE, kind: 'signal', captured });
+    }
+  }
+
+  emitError(captured: CapturedErrorV1): void {
+    for (const listener of this.messageListeners) {
+      listener({ type: PANEL_MESSAGE_CAPTURE, kind: 'error', captured });
     }
   }
 
@@ -100,6 +110,29 @@ function captured(overrides: Partial<CapturedSignalV1> = {}): CapturedSignalV1 {
       occurredAt: Date.parse('2026-09-05T12:34:56.789Z'),
       source: { id: 'host', label: 'Host application' },
       name: 'host.ready',
+    },
+    observedAt: Date.parse('2026-09-05T12:34:56.790Z'),
+    tabId: 17,
+    frameId: 0,
+    navigationId: 'navigation-1',
+    frameUrl: 'https://demo.example.test',
+    frameOrigin: 'https://demo.example.test',
+    ...overrides,
+  };
+}
+
+function capturedError(overrides: Partial<CapturedErrorV1> = {}): CapturedErrorV1 {
+  return {
+    error: {
+      protocol: 'koshko',
+      version: 1,
+      id: 'error-1',
+      producerId: 'browser-console:frame-1',
+      producerSequence: 1,
+      occurredAt: Date.parse('2026-09-05T12:34:56.789Z'),
+      source: { id: 'browser-console', label: 'Browser Console' },
+      name: 'console.error',
+      payload: { arguments: ['Checkout failed', { code: 'PAYMENT_ERROR' }] },
     },
     observedAt: Date.parse('2026-09-05T12:34:56.790Z'),
     tabId: 17,
@@ -298,7 +331,7 @@ describe('PanelApp', () => {
     const { port } = mountPanel();
 
     expect(screen.getByTestId('empty-state').textContent).toContain(
-      'No signals yet.',
+      'No timeline entries yet.',
     );
     fireEvent.click(screen.getByRole('button', { name: 'Global State' }));
     expect(screen.getByLabelText('Selected global state').textContent).toContain('0 items');
@@ -309,7 +342,7 @@ describe('PanelApp', () => {
     });
 
     expect(screen.getByTestId('reconnecting-banner').textContent).toContain(
-      'Signals may be missed',
+      'Events may be missed',
     );
     fireEvent.click(screen.getByRole('button', { name: 'Timeline' }));
     expect(screen.getByTestId('timeline').textContent).toContain('host.ready');
@@ -465,7 +498,7 @@ describe('PanelApp', () => {
     expect(screen.getAllByTestId('timeline-details')).toHaveLength(1);
   });
 
-  it('renders signal and capture metadata in the log', () => {
+  it('renders only the signal payload in the expanded log body', () => {
     const { port } = mountPanel();
 
     act(() =>
@@ -491,42 +524,61 @@ describe('PanelApp', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Log' }));
 
-    const log = screen.getByTestId('log').textContent ?? '';
-    expect(log).toContain('widget.process.failed');
-    expect(log).toContain('UPSTREAM_TIMEOUT');
-    expect(log).toContain('"severity": "error"');
-    expect(log).toContain('correlation-42');
-    expect(log).toContain('command-41');
-    expect(log).toContain('checkout');
-    expect(log).toContain('en-US');
-    expect(log).toContain('document-77');
-    expect(log).toContain('https://demo.example.test');
+    const row = document.querySelector<HTMLElement>('[data-log-entry-type="signal"]')!;
+    expect(row.textContent).toContain('widget.process.failed');
+    expect(row.textContent).toContain('Host application');
+    expect(row.textContent).toContain('UPSTREAM_TIMEOUT');
+    expect(row.textContent).not.toContain('"protocol"');
+    expect(row.textContent).not.toContain('"severity"');
+    expect(row.textContent).not.toContain('correlation-42');
+    expect(row.textContent).not.toContain('command-41');
+    expect(row.textContent).not.toContain('checkout');
+    expect(row.textContent).not.toContain('en-US');
+    expect(row.textContent).not.toContain('document-77');
+    expect(row.textContent).not.toContain('https://demo.example.test');
+
+    fireEvent.change(screen.getByRole('searchbox', { name: 'Search log' }), {
+      target: { value: 'document-77' },
+    });
+    expect(screen.getByTestId('log-empty-state').textContent).toContain('current filters');
   });
 
-  it('shows browser console errors in every signal representation without changing state', () => {
+  it('shows an explicit empty payload message for signals without details', () => {
+    const { port } = mountPanel();
+    act(() => port.emitCapture(captured()));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Log' }));
+
+    const row = document.querySelector<HTMLElement>('[data-log-entry-type="signal"]')!;
+    expect(within(row).getByText('No payload.')).toBeTruthy();
+  });
+
+  it('shows browser console errors as first-class red error entries without changing state', () => {
     const { port, repository } = mountPanel();
-    const consoleError = captured({
-      signal: {
-        ...captured().signal,
+    const consoleError = capturedError({
+      error: {
+        ...capturedError().error,
         id: 'console-error-1',
-        producerId: 'browser-console:frame-1',
-        source: { id: 'browser-console', label: 'Browser Console' },
-        name: 'console.error',
-        severity: 'error',
-        details: { arguments: ['Checkout failed', { code: 'PAYMENT_ERROR' }] },
-        tags: ['browser-console'],
       },
     });
 
-    act(() => port.emitCapture(consoleError));
+    act(() => port.emitError(consoleError));
 
     expect(screen.getByTestId('timeline').textContent).toContain('Browser Console');
     expect(screen.getByTestId('timeline').textContent).toContain('console.error');
+    const timelineError = document.querySelector<HTMLElement>('[data-entry-type="error"]')!;
+    expect(timelineError.closest('.react-flow__node')?.classList).toContain('entry-error');
+    expect(timelineError.textContent).toContain('Error');
+    expect(timelineError.dataset.signalName).toBeUndefined();
 
     fireEvent.click(screen.getByRole('button', { name: 'Log' }));
     expect(screen.getByRole('checkbox', { name: 'Browser Console' })).toBeTruthy();
-    expect(screen.getByTestId('log').textContent).toContain('PAYMENT_ERROR');
-    expect(screen.getByText('Console errors are captured as error signals.')).toBeTruthy();
+    expect((screen.getByRole('checkbox', { name: 'Error' }) as HTMLInputElement).checked).toBe(true);
+    const errorRow = document.querySelector<HTMLElement>('[data-log-entry-type="error"]')!;
+    expect(errorRow.classList).toContain('error');
+    expect(within(errorRow).getByText('Error')).toBeTruthy();
+    expect(errorRow.textContent).toContain('PAYMENT_ERROR');
+    expect(errorRow.textContent).not.toContain('"protocol"');
 
     fireEvent.change(screen.getByRole('searchbox', { name: 'Search log' }), {
       target: { value: 'checkout failed' },
@@ -535,10 +587,12 @@ describe('PanelApp', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'AI Log' }));
     const aiLog = screen.getByRole('textbox', { name: 'AI-ready Koshko log' }) as HTMLTextAreaElement;
+    expect(aiLog.value).toContain('"kind":"error"');
     expect(aiLog.value).toContain('console.error');
     expect(aiLog.value).toContain('PAYMENT_ERROR');
     expect(repository.getDisplayState()).toEqual({});
     expect(repository.exportJsonl()).toContain('console-error-1');
+    expect(repository.exportJsonl()).toContain('"errorCount":1');
   });
 
   it('buffers signals when paused, resumes, clears, and delegates export', () => {
@@ -783,6 +837,14 @@ describe('PanelApp', () => {
           name: 'other.event',
         },
       }));
+      port.emitError(capturedError({
+        error: {
+          ...capturedError().error,
+          id: 'matched-error',
+          producerSequence: 3,
+          payload: { message: 'Needle error' },
+        },
+      }));
       port.emitStateMutation(capturedStateMutation([
         { op: 'add', path: '/marker', value: 'Needle state' },
       ]));
@@ -790,13 +852,16 @@ describe('PanelApp', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Log' }));
     expect((screen.getByRole('checkbox', { name: 'Signal' }) as HTMLInputElement).checked).toBe(true);
+    expect((screen.getByRole('checkbox', { name: 'Error' }) as HTMLInputElement).checked).toBe(true);
     expect((screen.getByRole('checkbox', { name: 'State' }) as HTMLInputElement).checked).toBe(false);
     expect(document.querySelectorAll('[data-log-entry-type="signal"]')).toHaveLength(2);
+    expect(document.querySelectorAll('[data-log-entry-type="error"]')).toHaveLength(1);
     expect(document.querySelectorAll('[data-log-entry-type="state"]')).toHaveLength(0);
 
     fireEvent.click(screen.getByRole('checkbox', { name: 'Host application' }));
     fireEvent.click(screen.getByRole('checkbox', { name: 'Other' }));
     expect(document.querySelectorAll('[data-log-entry-type="signal"]')).toHaveLength(1);
+    expect(document.querySelectorAll('[data-log-entry-type="error"]')).toHaveLength(1);
     expect(screen.getByTestId('log').textContent).toContain('host.to-widget');
 
     fireEvent.change(screen.getByRole('searchbox', { name: 'Search log' }), {
@@ -806,6 +871,7 @@ describe('PanelApp', () => {
 
     fireEvent.click(screen.getByRole('checkbox', { name: 'State' }));
     fireEvent.click(screen.getByRole('checkbox', { name: 'Signal' }));
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Error' }));
     expect(screen.getByTestId('log-empty-state').textContent).toContain('current filters');
 
     fireEvent.click(screen.getByRole('checkbox', { name: 'Host application' }));

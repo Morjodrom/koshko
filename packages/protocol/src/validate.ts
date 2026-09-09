@@ -1,11 +1,15 @@
 import koshkoSignalV1Schema from './koshko-signal-v1.schema.json';
+import koshkoErrorV1Schema from './koshko-error-v1.schema.json';
 import koshkoStateMutationV1Schema from './koshko-state-mutation-v1.schema.json';
 import type {
   CapturedSignalV1,
+  CapturedErrorV1,
   CapturedStateMutationV1,
   JsonValue,
   KoshkoProtocolWindowMessageV1,
   KoshkoSignalV1,
+  KoshkoErrorV1,
+  KoshkoErrorWindowMessageV1,
   KoshkoStateMutationV1,
   KoshkoStateMutationWindowMessageV1,
   KoshkoStatePatchOperationV1,
@@ -13,6 +17,8 @@ import type {
 } from './types';
 import {
   normalizeCapturedSignalV1,
+  normalizeCapturedErrorV1,
+  normalizeKoshkoErrorV1,
   normalizeCapturedStateMutationV1,
   normalizeKoshkoSignalV1,
   normalizeKoshkoStateMutationV1,
@@ -24,13 +30,14 @@ const MAX_SERIALIZED_BYTES = 64 * 1024;
 const MAX_IDENTIFIER_CODE_POINTS = 128;
 
 export const koshkoSignalV1JsonSchema = koshkoSignalV1Schema;
+export const koshkoErrorV1JsonSchema = koshkoErrorV1Schema;
 export const koshkoStateMutationV1JsonSchema = koshkoStateMutationV1Schema;
 
 export function isActorReference(value: unknown): value is KoshkoSignalV1['source'] {
   if (!isObjectLike(value)) {
     return false;
   }
-  return typeof value.id === 'string' && value.id.length > 0;
+  return isBoundedIdentifier(readOwnDataProperty(value, 'id'));
 }
 
 export function isKoshkoSignalV1(value: unknown): value is KoshkoSignalV1 {
@@ -60,6 +67,29 @@ export function isKoshkoSignalV1(value: unknown): value is KoshkoSignalV1 {
     (value.causedBy === undefined || typeof value.causedBy === 'string') &&
     (value.tags === undefined || Array.isArray(value.tags))
   );
+}
+
+export function isKoshkoErrorV1(value: unknown): value is KoshkoErrorV1 {
+  if (!isObjectLike(value)) {
+    return false;
+  }
+  const producerSequence = readOwnDataProperty(value, 'producerSequence');
+  const occurredAt = readOwnDataProperty(value, 'occurredAt');
+  const structurallyValid = (
+    readOwnDataProperty(value, 'protocol') === 'koshko' &&
+    readOwnDataProperty(value, 'version') === 1 &&
+    isBoundedIdentifier(readOwnDataProperty(value, 'id')) &&
+    isBoundedIdentifier(readOwnDataProperty(value, 'producerId')) &&
+    typeof producerSequence === 'number' &&
+    Number.isInteger(producerSequence) &&
+    producerSequence > 0 &&
+    typeof occurredAt === 'number' &&
+    Number.isFinite(occurredAt) &&
+    isActorReference(readOwnDataProperty(value, 'source')) &&
+    isBoundedIdentifier(readOwnDataProperty(value, 'name')) &&
+    isJsonValue(readOwnDataProperty(value, 'payload'))
+  );
+  return structurallyValid && hasValidSerializedSize(normalizeKoshkoErrorV1(value));
 }
 
 export function isKoshkoStatePatchOperationV1(value: unknown): value is KoshkoStatePatchOperationV1 {
@@ -149,10 +179,24 @@ export function isKoshkoStateMutationWindowMessageV1(
   );
 }
 
+export function isKoshkoErrorWindowMessageV1(value: unknown): value is KoshkoErrorWindowMessageV1 {
+  if (!isObjectLike(value)) {
+    return false;
+  }
+  return (
+    readOwnDataProperty(value, 'protocol') === 'koshko' &&
+    readOwnDataProperty(value, 'version') === 1 &&
+    readOwnDataProperty(value, 'type') === 'error' &&
+    isKoshkoErrorV1(readOwnDataProperty(value, 'error'))
+  );
+}
+
 export function isKoshkoProtocolWindowMessageV1(
   value: unknown,
 ): value is KoshkoProtocolWindowMessageV1 {
-  return isKoshkoWindowMessageV1(value) || isKoshkoStateMutationWindowMessageV1(value);
+  return isKoshkoWindowMessageV1(value)
+    || isKoshkoStateMutationWindowMessageV1(value)
+    || isKoshkoErrorWindowMessageV1(value);
 }
 
 export function parseKoshkoWindowMessageV1(value: unknown): KoshkoWindowMessageV1 | undefined {
@@ -183,6 +227,20 @@ export function parseKoshkoStateMutationWindowMessageV1(
   };
 }
 
+export function parseKoshkoErrorWindowMessageV1(
+  value: unknown,
+): KoshkoErrorWindowMessageV1 | undefined {
+  if (!isKoshkoErrorWindowMessageV1(value)) {
+    return undefined;
+  }
+  return {
+    protocol: 'koshko',
+    version: 1,
+    type: 'error',
+    error: normalizeKoshkoErrorV1(readOwnDataProperty(value, 'error')),
+  };
+}
+
 export function parseKoshkoProtocolWindowMessageV1(
   value: unknown,
 ): KoshkoProtocolWindowMessageV1 | undefined {
@@ -197,11 +255,18 @@ export function parseKoshkoProtocolWindowMessageV1(
   if (type === 'state-mutation') {
     return parseKoshkoStateMutationWindowMessageV1(value);
   }
+  if (type === 'error') {
+    return parseKoshkoErrorWindowMessageV1(value);
+  }
   return undefined;
 }
 
 export function parseCapturedSignalV1(value: unknown): CapturedSignalV1 {
   return normalizeCapturedSignalV1(value);
+}
+
+export function parseCapturedErrorV1(value: unknown): CapturedErrorV1 {
+  return normalizeCapturedErrorV1(value);
 }
 
 export function parseCapturedStateMutationV1(value: unknown): CapturedStateMutationV1 {
@@ -268,7 +333,7 @@ function isStatePatch(patch: unknown[]): patch is KoshkoStatePatchOperationV1[] 
   return true;
 }
 
-function hasValidSerializedSize(value: KoshkoStateMutationV1): boolean {
+function hasValidSerializedSize(value: unknown): boolean {
   try {
     return (JSON.stringify(value)?.length ?? 0) <= MAX_SERIALIZED_BYTES;
   } catch {

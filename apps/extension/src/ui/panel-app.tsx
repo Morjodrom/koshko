@@ -8,7 +8,6 @@ import {
   type ReactElement,
 } from 'react';
 import type {
-  CapturedSignalV1,
   JsonObject,
 } from '@koshko/protocol';
 import type { PanelCaptureMessage } from '../messaging/messages';
@@ -18,10 +17,12 @@ import {
   formatActor,
   formatDateTime,
   getActorColumns,
+  isCapturedError,
   isCapturedSignal,
   type KoshkoLogEntry,
   type KoshkoStateSnapshot,
   type KoshkoTimelineActor,
+  type KoshkoTimelineEntry,
 } from '../state/repository';
 import type {
   InspectedSite,
@@ -71,8 +72,8 @@ export function PanelApp({
   const [access, setAccess] = useState<AccessState>({ status: 'checking' });
   const [paused, setPaused] = useState(repository.isPaused);
   const [unreadCount, setUnreadCount] = useState(repository.getUnreadCount());
-  const [displaySignals, setDisplaySignals] = useState(
-    repository.getDisplaySignals(),
+  const [displayTimelineEntries, setDisplayTimelineEntries] = useState(
+    repository.getDisplayTimelineEntries(),
   );
   const [displayState, setDisplayState] = useState<JsonObject>(
     repository.getDisplayState(),
@@ -91,10 +92,10 @@ export function PanelApp({
     () => new Set(getActorColumns(repository.getDisplayLog()).map((actor) => actor.key)),
   );
   const [selectedLogTypes, setSelectedLogTypes] = useState<ReadonlySet<LogEntryType>>(
-    new Set(['signal']),
+    new Set(['signal', 'error']),
   );
   const [aiLogBudget, setAiLogBudget] = useState<AiLogBudget>('16k');
-  const [expandedSignalIds, setExpandedSignalIds] = useState<
+  const [expandedEntryIds, setExpandedEntryIds] = useState<
     ReadonlySet<string>
   >(new Set());
   const knownActorKeys = useRef(
@@ -181,8 +182,8 @@ export function PanelApp({
     const syncFromRepository = (): void => {
       setPaused(repository.isPaused);
       setUnreadCount(repository.getUnreadCount());
-      const signals = repository.getDisplaySignals();
-      setDisplaySignals(signals);
+      const timelineEntries = repository.getDisplayTimelineEntries();
+      setDisplayTimelineEntries(timelineEntries);
       const log = repository.getDisplayLog();
       setDisplayLog(log);
       setDisplayState(repository.getDisplayState());
@@ -199,12 +200,12 @@ export function PanelApp({
         );
       }
       const displayedIds = new Set(
-        signals.map((captured) => captured.signal.id),
+        timelineEntries.map(getTimelineEntryId),
       );
-      setExpandedSignalIds(
+      setExpandedEntryIds(
         (previous) =>
           new Set(
-            [...previous].filter((signalId) => displayedIds.has(signalId)),
+            [...previous].filter((entryId) => displayedIds.has(entryId)),
           ),
       );
     };
@@ -251,21 +252,21 @@ export function PanelApp({
     });
   };
   const clear = (): void => {
-    setExpandedSignalIds(new Set());
+    setExpandedEntryIds(new Set());
     repository.clear();
   };
   const selectStateSnapshot = (index: number | null): void => {
     repository.selectStateSnapshot(index);
   };
-  const toggleDetails = useCallback((signalId: string): void => {
-    setExpandedSignalIds((previous) => {
+  const toggleDetails = useCallback((entryId: string): void => {
+    setExpandedEntryIds((previous) => {
       const next = new Set(previous);
-      next.has(signalId) ? next.delete(signalId) : next.add(signalId);
+      next.has(entryId) ? next.delete(entryId) : next.add(entryId);
       return next;
     });
   }, []);
-  const signals = displaySignals;
-  const actors = getActorColumns(signals);
+  const timelineEntries = displayTimelineEntries;
+  const actors = getActorColumns(timelineEntries);
   const logActors = getActorColumns(displayLog);
   const actorFilterActive = logActors.some(
     (actor) => !selectedActorKeys.has(actor.key),
@@ -273,11 +274,11 @@ export function PanelApp({
   const filteredLog = displayLog.filter((entry) => {
     const type = getLogEntryType(entry);
     if (!selectedLogTypes.has(type)) return false;
-    if (logQuery && !JSON.stringify(entry).toLowerCase().includes(logQuery.toLowerCase())) {
+    if (logQuery && !getVisibleLogText(entry).toLowerCase().includes(logQuery.toLowerCase())) {
       return false;
     }
     if (!actorFilterActive) return true;
-    return isCapturedSignal(entry) && matchesSelectedActor(entry, selectedActorKeys);
+    return matchesSelectedActor(entry, selectedActorKeys);
   });
   const latestDisplayState = displayStateHistory.at(-1)?.state ?? displayState;
   const aiLog = useMemo(() => formatAiLog({
@@ -290,7 +291,7 @@ export function PanelApp({
     <main className="shell">
       {connectionStatus !== 'connected' ? (
         <section className="reconnecting-banner" role="status" data-testid="reconnecting-banner">
-          Reconnecting to the background service. Signals may be missed while reconnecting.
+          Reconnecting to the background service. Events may be missed while reconnecting.
         </section>
       ) : null}
       <header className="toolbar card">
@@ -298,7 +299,7 @@ export function PanelApp({
           <BrandLockup compact />
           <h1>Tab {tabId}</h1>
           <p className="muted" data-testid="capture-status">
-            {signals.length} event{signals.length === 1 ? '' : 's'} captured
+            {timelineEntries.length} event{timelineEntries.length === 1 ? '' : 's'} captured
             {paused ? ` · paused · +${unreadCount} unread` : ''}
           </p>
         </div>
@@ -366,9 +367,9 @@ export function PanelApp({
       <section className="card" data-testid="panel-body">
         {activeTab === 'timeline' ? (
           <Timeline
-            signals={signals}
+            entries={timelineEntries}
             actors={actors}
-            expandedSignalIds={expandedSignalIds}
+            expandedEntryIds={expandedEntryIds}
             toggleDetails={toggleDetails}
           />
         ) : activeTab === 'log' ? (
@@ -719,7 +720,7 @@ function GlobalState({
   );
 }
 
-type LogEntryType = 'signal' | 'state';
+type LogEntryType = 'signal' | 'error' | 'state';
 
 function Log({
   entries,
@@ -743,7 +744,7 @@ function Log({
   onTypeToggle: (type: LogEntryType) => void;
 }): ReactElement {
   const emptyMessage = capturedEntryCount === 0
-    ? ['No log entries yet.', 'Captured signals and state mutations will appear here.']
+    ? ['No log entries yet.', 'Captured signals, browser errors, and state mutations will appear here.']
     : ['No log entries match the current filters.', 'Adjust the search or filters to show captured entries.'];
 
   return (
@@ -762,12 +763,12 @@ function Log({
         <fieldset className="log-filter-group">
           <legend>Entry type</legend>
           <label><input type="checkbox" checked={selectedTypes.has('signal')} onChange={() => onTypeToggle('signal')} /> Signal</label>
+          <label><input type="checkbox" checked={selectedTypes.has('error')} onChange={() => onTypeToggle('error')} /> Error</label>
           <label><input type="checkbox" checked={selectedTypes.has('state')} onChange={() => onTypeToggle('state')} /> State</label>
-          <span className="muted">Console errors are captured as error signals.</span>
         </fieldset>
         <fieldset className="log-filter-group">
           <legend>Actors</legend>
-          {actors.length === 0 ? <span className="muted">No signal actors captured.</span> : actors.map((actor) => (
+          {actors.length === 0 ? <span className="muted">No entry actors captured.</span> : actors.map((actor) => (
             <label key={actor.key}>
               <input
                 type="checkbox"
@@ -786,24 +787,33 @@ function Log({
           <span>{emptyMessage[1]}</span>
         </div>
       ) : entries.map((entry, index) => {
-        const isSignal = isCapturedSignal(entry);
-        const metadata = isSignal ? entry.signal : entry.mutation;
-        const type = isSignal ? 'Signal' : 'State';
+        const entryType = getLogEntryType(entry);
+        const type = entryType === 'signal' ? 'Signal' : entryType === 'error' ? 'Error' : 'State';
+        const metadata = getLogEntryMetadata(entry);
+        const source = getLogEntrySource(entry);
+        const payload = getLogEntryPayload(entry);
         return (
         <details
-          className="log-item"
+          className={`log-item ${entryType}`}
           open={index === entries.length - 1}
-          data-log-entry-type={type.toLowerCase()}
-          data-signal-name={isSignal ? entry.signal.name : undefined}
+          data-log-entry-type={entryType}
+          data-entry-name={getLogEntryName(entry)}
+          data-signal-name={isCapturedSignal(entry) ? entry.signal.name : undefined}
           key={`${type}-${metadata.id}`}
         >
           <summary>
-            <span className="log-summary-title"><span className={`log-entry-kind ${type.toLowerCase()}`}>{type}</span> {isSignal ? entry.signal.name : 'state mutation'}</span>
+            <span className="log-summary-title">
+              <span className={`log-entry-kind ${entryType}`}>{type}</span>
+              {' '}{getLogEntryName(entry)}
+              {source === undefined ? null : <span className="log-entry-source"> · {formatActor(source)}</span>}
+            </span>
             <span className="muted">
               {formatDateTime(metadata.occurredAt)}
             </span>
           </summary>
-          <pre>{JSON.stringify(entry, null, 2)}</pre>
+          {payload === undefined
+            ? <p className="log-empty-payload muted">No payload.</p>
+            : <pre>{JSON.stringify(payload, null, 2)}</pre>}
         </details>
         );
       })}
@@ -811,11 +821,58 @@ function Log({
   );
 }
 
-function matchesSelectedActor(entry: CapturedSignalV1, selectedActorKeys: ReadonlySet<string>): boolean {
-  return selectedActorKeys.has(actorKey(entry.signal.source))
-    || (entry.signal.target !== undefined && selectedActorKeys.has(actorKey(entry.signal.target)));
+function matchesSelectedActor(entry: KoshkoLogEntry, selectedActorKeys: ReadonlySet<string>): boolean {
+  if (isCapturedSignal(entry)) {
+    return selectedActorKeys.has(actorKey(entry.signal.source))
+      || (entry.signal.target !== undefined && selectedActorKeys.has(actorKey(entry.signal.target)));
+  }
+  return isCapturedError(entry) && selectedActorKeys.has(actorKey(entry.error.source));
 }
 
 function getLogEntryType(entry: KoshkoLogEntry): LogEntryType {
-  return isCapturedSignal(entry) ? 'signal' : 'state';
+  if (isCapturedSignal(entry)) return 'signal';
+  return isCapturedError(entry) ? 'error' : 'state';
+}
+
+function getLogEntryMetadata(entry: KoshkoLogEntry): {
+  id: string;
+  occurredAt: number;
+} {
+  if (isCapturedSignal(entry)) return entry.signal;
+  if (isCapturedError(entry)) return entry.error;
+  return entry.mutation;
+}
+
+function getLogEntryName(entry: KoshkoLogEntry): string {
+  if (isCapturedSignal(entry)) return entry.signal.name;
+  if (isCapturedError(entry)) return entry.error.name;
+  return entry.mutation.label ?? 'state mutation';
+}
+
+function getLogEntrySource(entry: KoshkoLogEntry) {
+  if (isCapturedSignal(entry)) return entry.signal.source;
+  if (isCapturedError(entry)) return entry.error.source;
+  return undefined;
+}
+
+function getLogEntryPayload(entry: KoshkoLogEntry) {
+  if (isCapturedSignal(entry)) return entry.signal.details;
+  if (isCapturedError(entry)) return entry.error.payload;
+  return entry.mutation.patch;
+}
+
+function getVisibleLogText(entry: KoshkoLogEntry): string {
+  const source = getLogEntrySource(entry);
+  const metadata = getLogEntryMetadata(entry);
+  return [
+    getLogEntryType(entry),
+    getLogEntryName(entry),
+    source === undefined ? '' : formatActor(source),
+    formatDateTime(metadata.occurredAt),
+    JSON.stringify(getLogEntryPayload(entry)) ?? '',
+  ].join(' ');
+}
+
+function getTimelineEntryId(entry: KoshkoTimelineEntry): string {
+  return isCapturedSignal(entry) ? entry.signal.id : entry.error.id;
 }

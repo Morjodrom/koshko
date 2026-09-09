@@ -184,10 +184,17 @@ export class PanelConnection implements ManagedPanelConnection {
 function isPanelCaptureMessage(message: unknown): message is PanelCaptureMessage {
   if (!message || typeof message !== 'object') return false;
   const value = message as { type?: unknown; kind?: unknown; captured?: unknown };
-  if (value.type !== PANEL_MESSAGE_CAPTURE || (value.kind !== 'signal' && value.kind !== 'state-mutation')) return false;
+  if (
+    value.type !== PANEL_MESSAGE_CAPTURE
+    || (value.kind !== 'signal' && value.kind !== 'state-mutation' && value.kind !== 'error')
+  ) return false;
   if (!value.captured || typeof value.captured !== 'object') return false;
-  const captured = value.captured as { signal?: unknown; mutation?: unknown };
-  return value.kind === 'signal'
-    ? Boolean(captured.signal && typeof captured.signal === 'object')
-    : Boolean(captured.mutation && typeof captured.mutation === 'object');
+  const captured = value.captured as { signal?: unknown; mutation?: unknown; error?: unknown };
+  if (value.kind === 'signal') {
+    return Boolean(captured.signal && typeof captured.signal === 'object');
+  }
+  if (value.kind === 'error') {
+    return Boolean(captured.error && typeof captured.error === 'object');
+  }
+  return Boolean(captured.mutation && typeof captured.mutation === 'object');
 }

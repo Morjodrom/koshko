@@ -78,6 +78,45 @@ describe('window capture', () => {
     }));
   });
 
+  it('forwards normalized browser errors as error transport messages', () => {
+    const sendMessage = vi.fn(() => Promise.resolve());
+    vi.stubGlobal('chrome', { runtime: { sendMessage } });
+    cleanups.push(startCapture());
+
+    dispatchSelfMessage({
+      protocol: 'koshko',
+      version: 1,
+      type: 'error',
+      error: {
+        protocol: 'koshko',
+        version: 1,
+        id: 'error-1',
+        producerId: 'browser-console:frame-1',
+        producerSequence: 1,
+        occurredAt: 10,
+        source: { id: 'browser-console', label: 'Browser Console' },
+        name: 'console.error',
+        payload: {
+          arguments: [{ token: 'sensitive-token' }],
+        },
+      },
+    });
+
+    expect(sendMessage).toHaveBeenCalledWith(expect.objectContaining({
+      type: PANEL_MESSAGE_CAPTURE,
+      kind: 'error',
+      error: expect.objectContaining({
+        id: 'error-1',
+        name: 'console.error',
+        payload: { arguments: [{ token: '[Redacted]' }] },
+      }),
+      observedAt: expect.any(Number),
+      navigationId: expect.any(String),
+      frameUrl: location.href,
+      frameOrigin: location.origin,
+    }));
+  });
+
   it('ignores malformed, unsupported, and non-self window messages', () => {
     const sendMessage = vi.fn(() => Promise.resolve());
     vi.stubGlobal('chrome', { runtime: { sendMessage } });

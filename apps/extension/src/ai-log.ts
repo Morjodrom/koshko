@@ -1,6 +1,7 @@
 import type { JsonObject, JsonValue } from '@koshko/protocol';
 import {
   actorKey,
+  isCapturedError,
   isCapturedSignal,
   type KoshkoLogEntry,
 } from './state/repository';
@@ -193,7 +194,9 @@ function compactEntry(
   frames: Map<string, FrameDictionaryEntry>,
   maxBytes: number,
 ): CompactRecord {
-  const metadata = isCapturedSignal(entry) ? entry.signal : entry.mutation;
+  const metadata = isCapturedSignal(entry)
+    ? entry.signal
+    : isCapturedError(entry) ? entry.error : entry.mutation;
   const frame = registerFrame(entry, frames);
   let value: Record<string, unknown>;
   const actorAliases: string[] = [];
@@ -224,6 +227,24 @@ function compactEntry(
       ...(entry.signal.tags === undefined ? {} : { tags: entry.signal.tags }),
       ...(entry.signal.context === undefined ? {} : { context: entry.signal.context }),
       ...(entry.signal.details === undefined ? {} : { details: entry.signal.details }),
+      frame,
+    });
+  } else if (isCapturedError(entry)) {
+    const source = registerActor(entry.error.source, actors);
+    actorAliases.push(source);
+    value = compactObject({
+      kind: 'error',
+      n: number,
+      dtMs: metadata.occurredAt - baseTime,
+      ...(entry.observedAt !== metadata.occurredAt
+        ? { observedDelayMs: entry.observedAt - metadata.occurredAt }
+        : {}),
+      id: entry.error.id,
+      producer: entry.error.producerId,
+      seq: entry.error.producerSequence,
+      source,
+      name: entry.error.name,
+      payload: entry.error.payload,
       frame,
     });
   } else {
@@ -262,7 +283,7 @@ function compactOversizedRecord(
 
   const value = { ...record };
   let truncatedValueCount = 0;
-  for (const key of ['details', 'context', 'tags', 'patch']) {
+  for (const key of ['details', 'payload', 'context', 'tags', 'patch']) {
     if (!(key in value) || byteLength(safeJson(value)) <= maxBytes) continue;
     const original = value[key];
     value[key] = truncationMarker(original);
@@ -372,7 +393,8 @@ function compactObject(value: Record<string, unknown>): Record<string, unknown> 
 function getBaseTime(entries: readonly KoshkoLogEntry[]): number {
   if (entries.length === 0) return 0;
   const first = entries[0];
-  return isCapturedSignal(first) ? first.signal.occurredAt : first.mutation.occurredAt;
+  if (isCapturedSignal(first)) return first.signal.occurredAt;
+  return isCapturedError(first) ? first.error.occurredAt : first.mutation.occurredAt;
 }
 
 function safeJson(value: unknown): string {

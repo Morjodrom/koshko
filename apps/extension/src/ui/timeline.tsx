@@ -20,9 +20,8 @@ import {
   type Viewport,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
-import type { CapturedSignalV1 } from '@koshko/protocol';
 import { Icon } from './brand';
-import { formatActor, type KoshkoTimelineActor } from '../state/repository';
+import { formatActor, type KoshkoTimelineActor, type KoshkoTimelineEntry } from '../state/repository';
 import {
   TIMELINE_LANE_WIDTH,
   createTimelineLayout,
@@ -36,10 +35,10 @@ import {
 } from './timeline-layout';
 
 export interface TimelineProps {
-  signals: CapturedSignalV1[];
+  entries: KoshkoTimelineEntry[];
   actors: KoshkoTimelineActor[];
-  expandedSignalIds: ReadonlySet<string>;
-  toggleDetails: (signalId: string) => void;
+  expandedEntryIds: ReadonlySet<string>;
+  toggleDetails: (entryId: string) => void;
 }
 
 const EventNode = memo(function EventNode({ data }: NodeProps<TimelineNode>): ReactElement {
@@ -58,14 +57,17 @@ const EventNode = memo(function EventNode({ data }: NodeProps<TimelineNode>): Re
       <button
         className="timeline-event-control nodrag nopan"
         type="button"
-        data-signal-name={event.name}
+        data-entry-type={event.entryType}
+        data-entry-name={event.name}
+        data-signal-name={event.entryType === 'signal' ? event.name : undefined}
         data-direction={event.direction}
         aria-expanded={event.expanded}
-        aria-controls={`timeline-details-${event.signalId}`}
+        aria-controls={`timeline-details-${event.entryId}`}
         title={event.directionLabel}
-        onClick={() => event.toggleDetails(event.signalId)}
+        onClick={() => event.toggleDetails(event.entryId)}
       >
         <span className="timeline-event-dot" aria-hidden="true" />
+        {event.entryType === 'error' ? <span className="timeline-entry-kind error">Error</span> : null}
         <span>{event.name}</span>
       </button>
     </>
@@ -91,7 +93,7 @@ const DetailNode = memo(function DetailNode({ data }: NodeProps<TimelineNode>): 
   return (
     <section
       className="timeline-details nodrag nopan"
-      id={`timeline-details-${detail.signalId}`}
+      id={`timeline-details-${detail.entryId}`}
       data-testid="timeline-details"
     >
       <pre>{detail.json}</pre>
@@ -121,12 +123,12 @@ const nodeTypes = {
 const edgeTypes = { timelineSignal: SignalEdge };
 
 export function Timeline(props: TimelineProps): ReactElement {
-  if (props.signals.length === 0) {
+  if (props.entries.length === 0) {
     return (
       <div className="empty empty-with-icon" data-testid="empty-state">
         <Icon name="timeline" className="state-icon" />
-        <p>No signals yet.</p>
-        <span>Signals from this tab will appear here.</span>
+        <p>No timeline entries yet.</p>
+        <span>Signals and browser errors from this tab will appear here.</span>
       </div>
     );
   }
@@ -134,23 +136,23 @@ export function Timeline(props: TimelineProps): ReactElement {
 }
 
 function TimelineCanvas({
-  signals,
+  entries,
   actors,
-  expandedSignalIds,
+  expandedEntryIds,
   toggleDetails,
 }: TimelineProps): ReactElement {
   const [viewport, setViewport] = useState<Viewport>({ x: 0, y: 0, zoom: 1 });
-  const [selectedSignalId, setSelectedSignalId] = useState<string | null>(null);
+  const [selectedEntryId, setSelectedEntryId] = useState<string | null>(null);
   const layout = useMemo(() => createTimelineLayout({
-    signals,
+    entries,
     actors,
-    expandedSignalIds,
-    selectedSignalId,
+    expandedEntryIds,
+    selectedEntryId,
     toggleDetails,
-  }), [actors, expandedSignalIds, selectedSignalId, signals, toggleDetails]);
+  }), [actors, entries, expandedEntryIds, selectedEntryId, toggleDetails]);
   const onNodeClick = useCallback<NodeMouseHandler<TimelineNode>>((_event, node) => {
     if (node.type === 'timelineEvent') {
-      setSelectedSignalId((node.data as TimelineEventNodeData).signalId);
+      setSelectedEntryId((node.data as TimelineEventNodeData).entryId);
     }
   }, []);
 
@@ -179,7 +181,7 @@ function TimelineCanvas({
               <div
                 className="timeline-time-entry"
                 data-testid="timeline-time-entry"
-                key={timestamp.signalId}
+                key={timestamp.entryId}
                 title={timestamp.title}
                 style={{ top: timestamp.top }}
               >
@@ -202,7 +204,7 @@ function TimelineCanvas({
               <div
                 className="timeline-separator"
                 data-testid="timeline-separator"
-                key={separator.signalId}
+                key={separator.entryId}
                 style={{ top: separator.top }}
               />
             ))}
@@ -233,7 +235,7 @@ function TimelineCanvas({
             ]}
             onViewportChange={setViewport}
             onNodeClick={onNodeClick}
-            onPaneClick={() => setSelectedSignalId(null)}
+            onPaneClick={() => setSelectedEntryId(null)}
             proOptions={{ hideAttribution: true }}
             ariaLabelConfig={{
               'node.a11yDescription.default': 'Press Enter or Space to select this timeline event.',

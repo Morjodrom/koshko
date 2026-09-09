@@ -2,6 +2,7 @@ import {
   applyStateMutationPatch,
   compareCapturedSignals,
   type ActorReference,
+  type CapturedErrorV1,
   type CapturedSignalV1,
   type CapturedStateMutationV1,
   type JsonObject,
@@ -13,7 +14,8 @@ export interface KoshkoTimelineActor {
   reference: ActorReference;
 }
 
-export type KoshkoLogEntry = CapturedSignalV1 | CapturedStateMutationV1;
+export type KoshkoTimelineEntry = CapturedSignalV1 | CapturedErrorV1;
+export type KoshkoLogEntry = KoshkoTimelineEntry | CapturedStateMutationV1;
 
 export interface KoshkoStateSnapshot {
   index: number;
@@ -25,6 +27,8 @@ export interface KoshkoStateSnapshot {
 export class KoshkoRepository {
   private readonly capturedSignals: CapturedSignalV1[] = [];
 
+  private readonly capturedErrors: CapturedErrorV1[] = [];
+
   private readonly capturedLog: KoshkoLogEntry[] = [];
 
   private paused = false;
@@ -32,6 +36,8 @@ export class KoshkoRepository {
   private readonly listeners = new Set<() => void>();
 
   private displaySignals: CapturedSignalV1[] = [];
+
+  private displayTimelineEntries: KoshkoTimelineEntry[] = [];
 
   private displayLog: KoshkoLogEntry[] = [];
 
@@ -55,6 +61,10 @@ export class KoshkoRepository {
 
   getDisplaySignals(): CapturedSignalV1[] {
     return [...this.displaySignals];
+  }
+
+  getDisplayTimelineEntries(): KoshkoTimelineEntry[] {
+    return [...this.displayTimelineEntries];
   }
 
   getDisplayLog(): KoshkoLogEntry[] {
@@ -113,7 +123,7 @@ export class KoshkoRepository {
     this.notify();
   }
 
-  record(captured: CapturedSignalV1 | CapturedStateMutationV1): void {
+  record(captured: KoshkoLogEntry): void {
     const identity = this.getDocumentIdentity(captured);
     if (captured.frameId === 0 && identity !== undefined) {
       if (this.topFrameIdentity !== undefined && this.topFrameIdentity !== identity) {
@@ -125,6 +135,8 @@ export class KoshkoRepository {
     this.capturedLog.push(captured);
     if (isCapturedSignal(captured)) {
       this.capturedSignals.push(captured);
+    } else if (isCapturedError(captured)) {
+      this.capturedErrors.push(captured);
     } else {
       const nextState = applyStateMutationPatch(this.state, captured.mutation.patch);
       if (nextState !== this.state) {
@@ -150,8 +162,10 @@ export class KoshkoRepository {
 
   private reset(): void {
     this.capturedSignals.length = 0;
+    this.capturedErrors.length = 0;
     this.capturedLog.length = 0;
     this.displaySignals = [];
+    this.displayTimelineEntries = [];
     this.displayLog = [];
     const initialStateSnapshot = createInitialStateSnapshot();
     this.state = initialStateSnapshot.state;
@@ -167,33 +181,40 @@ export class KoshkoRepository {
     return [...this.capturedSignals].sort(compareCapturedSignals);
   }
 
+  getTimelineEntries(): KoshkoTimelineEntry[] {
+    return [...this.capturedSignals, ...this.capturedErrors].sort(compareCapturedLogEntries);
+  }
+
   getLog(): KoshkoLogEntry[] {
     return [...this.capturedLog].sort(compareCapturedLogEntries);
   }
 
   exportJsonl(): string {
-    const signals = this.getSignals();
+    const entries = this.getTimelineEntries();
     const header = {
       protocol: 'koshko',
       version: 1,
       type: 'export-metadata',
-      count: signals.length,
+      count: entries.length,
+      signalCount: this.capturedSignals.length,
+      errorCount: this.capturedErrors.length,
       exportedAt: new Date().toISOString(),
     };
 
-    return [header, ...signals]
-      .map((signal) => JSON.stringify(signal))
+    return [header, ...entries]
+      .map((entry) => JSON.stringify(entry))
       .join('\n');
   }
 
   private getDocumentIdentity(
-    captured: CapturedSignalV1 | CapturedStateMutationV1,
+    captured: KoshkoLogEntry,
   ): string | undefined {
     return captured.documentId ?? captured.navigationId;
   }
 
   private syncDisplaySnapshot(): void {
     this.displaySignals = this.getSignals();
+    this.displayTimelineEntries = this.getTimelineEntries();
     this.displayLog = this.getLog();
     this.displayStateHistory = this.stateHistory;
     this.displayState = this.getSelectedDisplayState();
@@ -297,7 +318,7 @@ function compareCapturedLogEntries(left: KoshkoLogEntry, right: KoshkoLogEntry):
   const id = leftMetadata.id.localeCompare(rightMetadata.id);
   if (id !== 0) return id;
 
-  return Number(isCapturedSignal(left)) - Number(isCapturedSignal(right));
+  return getCapturedEntryType(left).localeCompare(getCapturedEntryType(right));
 }
 
 function getLogEntryMetadata(entry: KoshkoLogEntry): {
@@ -306,21 +327,36 @@ function getLogEntryMetadata(entry: KoshkoLogEntry): {
   producerSequence: number;
   occurredAt: number;
 } {
-  return isCapturedSignal(entry) ? entry.signal : entry.mutation;
+  if (isCapturedSignal(entry)) return entry.signal;
+  if (isCapturedError(entry)) return entry.error;
+  return entry.mutation;
 }
 
 export function isCapturedSignal(
-  captured: CapturedSignalV1 | CapturedStateMutationV1,
+  captured: KoshkoLogEntry,
 ): captured is CapturedSignalV1 {
   return 'signal' in captured;
+}
+
+export function isCapturedError(captured: KoshkoLogEntry): captured is CapturedErrorV1 {
+  return 'error' in captured;
+}
+
+function getCapturedEntryType(entry: KoshkoLogEntry): 'error' | 'signal' | 'state' {
+  if (isCapturedSignal(entry)) return 'signal';
+  if (isCapturedError(entry)) return 'error';
+  return 'state';
 }
 
 export function getActorColumns(entries: readonly KoshkoLogEntry[]): KoshkoTimelineActor[] {
   const columns: KoshkoTimelineActor[] = [];
   const seen = new Set<string>();
   for (const entry of entries) {
-    if (!isCapturedSignal(entry)) continue;
-    for (const reference of [entry.signal.source, entry.signal.target]) {
+    if (!isCapturedSignal(entry) && !isCapturedError(entry)) continue;
+    const references = isCapturedSignal(entry)
+      ? [entry.signal.source, entry.signal.target]
+      : [entry.error.source];
+    for (const reference of references) {
       if (!reference) continue;
       const key = actorKey(reference);
       if (seen.has(key)) continue;

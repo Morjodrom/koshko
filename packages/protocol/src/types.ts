@@ -32,6 +32,18 @@ export interface KoshkoSignalV1 {
   tags?: string[];
 }
 
+export interface KoshkoErrorV1 {
+  protocol: 'koshko';
+  version: 1;
+  id: string;
+  producerId: string;
+  producerSequence: number;
+  occurredAt: number;
+  source: ActorReference;
+  name: string;
+  payload: JsonValue;
+}
+
 export interface KoshkoStateAddOperationV1 {
   op: 'add';
   path: string;
@@ -76,6 +88,17 @@ export interface CapturedSignalV1 {
   frameOrigin: string;
 }
 
+export interface CapturedErrorV1 {
+  error: KoshkoErrorV1;
+  observedAt: number;
+  tabId: number;
+  frameId: number;
+  documentId?: string;
+  navigationId: string;
+  frameUrl: string;
+  frameOrigin: string;
+}
+
 export interface CapturedStateMutationV1 {
   mutation: KoshkoStateMutationV1;
   observedAt: number;
@@ -101,5 +124,15 @@ export interface KoshkoStateMutationWindowMessageV1 {
   mutation: KoshkoStateMutationV1;
 }
 
-export type KoshkoProtocolWindowMessageV1 = KoshkoWindowMessageV1 | KoshkoStateMutationWindowMessageV1;
+export interface KoshkoErrorWindowMessageV1 {
+  protocol: 'koshko';
+  version: 1;
+  type: 'error';
+  error: KoshkoErrorV1;
+}
+
+export type KoshkoProtocolWindowMessageV1 =
+  | KoshkoWindowMessageV1
+  | KoshkoStateMutationWindowMessageV1
+  | KoshkoErrorWindowMessageV1;
 export type AnyKoshkoWindowMessageV1 = KoshkoProtocolWindowMessageV1;

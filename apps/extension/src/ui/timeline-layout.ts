@@ -4,12 +4,14 @@ import {
   type Edge,
   type Node,
 } from '@xyflow/react';
-import type { CapturedSignalV1 } from '@koshko/protocol';
 import {
   actorKey,
   formatActor,
   formatTime,
+  isCapturedError,
+  isCapturedSignal,
   type KoshkoTimelineActor,
+  type KoshkoTimelineEntry,
 } from '../state/repository';
 
 export const TIMELINE_LANE_WIDTH = 220;
@@ -26,13 +28,14 @@ export type TimelineSeverity = 'debug' | 'info' | 'success' | 'warning' | 'error
 
 export interface TimelineEventNodeData extends Record<string, unknown> {
   kind: 'event';
-  signalId: string;
+  entryId: string;
+  entryType: 'signal' | 'error';
   name: string;
   severity: TimelineSeverity;
   expanded: boolean;
   direction: 'forward' | 'reverse' | 'internal';
   directionLabel: string;
-  toggleDetails: (signalId: string) => void;
+  toggleDetails: (entryId: string) => void;
 }
 
 export interface TimelineTargetNodeData extends Record<string, unknown> {
@@ -43,7 +46,7 @@ export interface TimelineTargetNodeData extends Record<string, unknown> {
 
 export interface TimelineDetailNodeData extends Record<string, unknown> {
   kind: 'detail';
-  signalId: string;
+  entryId: string;
   json: string;
 }
 
@@ -53,7 +56,7 @@ export type TimelineNode =
   | Node<TimelineDetailNodeData, 'timelineDetail'>;
 
 export interface TimelineEdgeData extends Record<string, unknown> {
-  signalId: string;
+  entryId: string;
   severity: TimelineSeverity;
   directionLabel: string;
 }
@@ -61,7 +64,7 @@ export interface TimelineEdgeData extends Record<string, unknown> {
 export type TimelineEdge = Edge<TimelineEdgeData, 'timelineSignal'>;
 
 export interface TimelineTimestamp {
-  signalId: string;
+  entryId: string;
   top: number;
   time: string;
   source: string;
@@ -69,7 +72,7 @@ export interface TimelineTimestamp {
 }
 
 export interface TimelineSeparator {
-  signalId: string;
+  entryId: string;
   top: number;
 }
 
@@ -83,18 +86,18 @@ export interface TimelineLayout {
 }
 
 interface CreateTimelineLayoutOptions {
-  signals: CapturedSignalV1[];
+  entries: KoshkoTimelineEntry[];
   actors: KoshkoTimelineActor[];
-  expandedSignalIds: ReadonlySet<string>;
-  selectedSignalId: string | null;
-  toggleDetails: (signalId: string) => void;
+  expandedEntryIds: ReadonlySet<string>;
+  selectedEntryId: string | null;
+  toggleDetails: (entryId: string) => void;
 }
 
 export function createTimelineLayout({
-  signals,
+  entries,
   actors,
-  expandedSignalIds,
-  selectedSignalId,
+  expandedEntryIds,
+  selectedEntryId,
   toggleDetails,
 }: CreateTimelineLayoutOptions): TimelineLayout {
   const actorIndexes = new Map(actors.map((actor, index) => [actor.key, index]));
@@ -105,10 +108,13 @@ export function createTimelineLayout({
   const width = Math.max(actors.length * TIMELINE_LANE_WIDTH, TIMELINE_LANE_WIDTH);
   let rowTop = CANVAS_PADDING;
 
-  for (const [signalIndex, captured] of signals.entries()) {
-    const { signal } = captured;
-    const sourceKey = actorKey(signal.source);
-    const targetKey = signal.target ? actorKey(signal.target) : null;
+  for (const [entryIndex, captured] of entries.entries()) {
+    const isSignal = isCapturedSignal(captured);
+    const metadata = isSignal ? captured.signal : captured.error;
+    const entryType = isSignal ? 'signal' : 'error';
+    const target = isSignal ? captured.signal.target : undefined;
+    const sourceKey = actorKey(metadata.source);
+    const targetKey = target ? actorKey(target) : null;
     const sourceIndex = actorIndexes.get(sourceKey);
     const targetIndex = targetKey === null ? undefined : actorIndexes.get(targetKey);
     if (sourceIndex === undefined) continue;
@@ -117,12 +123,14 @@ export function createTimelineLayout({
     const direction = hasArrow
       ? targetIndex > sourceIndex ? 'forward' : 'reverse'
       : 'internal';
-    const directionLabel = hasArrow && signal.target
-      ? `${formatActor(signal.source)} sends ${signal.name} to ${formatActor(signal.target)}`
-      : `${formatActor(signal.source)} records internal event ${signal.name}`;
-    const severity = signal.severity ?? 'info';
-    const eventId = `event:${signal.id}`;
-    const selected = selectedSignalId === signal.id;
+    const directionLabel = hasArrow && target
+      ? `${formatActor(metadata.source)} sends ${metadata.name} to ${formatActor(target)}`
+      : isCapturedError(captured)
+        ? `${formatActor(metadata.source)} records error ${metadata.name}`
+        : `${formatActor(metadata.source)} records internal event ${metadata.name}`;
+    const severity = isCapturedError(captured) ? 'error' : captured.signal.severity ?? 'info';
+    const eventId = `event:${metadata.id}`;
+    const selected = selectedEntryId === metadata.id;
 
     nodes.push({
       id: eventId,
@@ -138,13 +146,14 @@ export function createTimelineLayout({
       selectable: true,
       selected,
       ariaLabel: directionLabel,
-      className: `timeline-flow-event severity-${severity}`,
+      className: `timeline-flow-event entry-${entryType} severity-${severity}`,
       data: {
         kind: 'event',
-        signalId: signal.id,
-        name: signal.name,
+        entryId: metadata.id,
+        entryType,
+        name: metadata.name,
         severity,
-        expanded: expandedSignalIds.has(signal.id),
+        expanded: expandedEntryIds.has(metadata.id),
         direction,
         directionLabel,
         toggleDetails,
@@ -153,7 +162,7 @@ export function createTimelineLayout({
 
     if (hasArrow && targetIndex !== undefined) {
       const edgeDirection = direction === 'reverse' ? 'reverse' : 'forward';
-      const targetId = `target:${signal.id}`;
+      const targetId = `target:${metadata.id}`;
       nodes.push({
         id: targetId,
         type: 'timelineTarget',
@@ -172,7 +181,7 @@ export function createTimelineLayout({
         data: { kind: 'target', direction: edgeDirection, label: directionLabel },
       });
       edges.push({
-        id: `edge:${signal.id}`,
+        id: `edge:${metadata.id}`,
         type: 'timelineSignal',
         source: eventId,
         target: targetId,
@@ -189,23 +198,23 @@ export function createTimelineLayout({
         },
         className: selected ? 'timeline-flow-edge selected' : 'timeline-flow-edge',
         style: { stroke: severityColor(severity), strokeWidth: selected ? 3 : 2 },
-        data: { signalId: signal.id, severity, directionLabel },
+        data: { entryId: metadata.id, severity, directionLabel },
       });
     }
 
-    const occurredAtIso = new Date(signal.occurredAt).toISOString();
+    const occurredAtIso = new Date(metadata.occurredAt).toISOString();
     timestamps.push({
-      signalId: signal.id,
+      entryId: metadata.id,
       top: rowTop + ROW_PADDING_TOP,
-      time: formatTime(signal.occurredAt),
-      source: signal.source.label ?? signal.source.id,
-      title: `${occurredAtIso} (${signal.occurredAt})`,
+      time: formatTime(metadata.occurredAt),
+      source: metadata.source.label ?? metadata.source.id,
+      title: `${occurredAtIso} (${metadata.occurredAt})`,
     });
 
     rowTop += TIMELINE_ROW_HEIGHT;
-    if (expandedSignalIds.has(signal.id)) {
+    if (expandedEntryIds.has(metadata.id)) {
       nodes.push({
-        id: `detail:${signal.id}`,
+        id: `detail:${metadata.id}`,
         type: 'timelineDetail',
         position: { x: 8, y: rowTop - DETAIL_GAP },
         width: width - 16,
@@ -217,14 +226,14 @@ export function createTimelineLayout({
         className: 'timeline-flow-detail',
         data: {
           kind: 'detail',
-          signalId: signal.id,
+          entryId: metadata.id,
           json: JSON.stringify(captured, null, 2),
         },
       });
       rowTop += TIMELINE_DETAIL_HEIGHT + DETAIL_GAP;
     }
-    if (signalIndex < signals.length - 1) {
-      separators.push({ signalId: signal.id, top: rowTop });
+    if (entryIndex < entries.length - 1) {
+      separators.push({ entryId: metadata.id, top: rowTop });
     }
   }
 

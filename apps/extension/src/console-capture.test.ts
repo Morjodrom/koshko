@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { KoshkoWindowMessageV1 } from '@koshko/protocol';
+import type { KoshkoErrorWindowMessageV1 } from '@koshko/protocol';
 import { startConsoleCapture } from './console-capture';
 
 describe('browser console capture', () => {
@@ -14,8 +14,8 @@ describe('browser console capture', () => {
     vi.restoreAllMocks();
   });
 
-  it('preserves console.error behavior and emits a normalized error signal', () => {
-    const nativeError = vi.fn();
+  it('preserves console.error behavior and emits a normalized error entry', () => {
+    const nativeError = vi.fn(() => 'native-result');
     const postMessage = vi.spyOn(window, 'postMessage').mockImplementation(() => {});
     window.console.error = nativeError;
     cleanups.push(startConsoleCapture());
@@ -23,22 +23,22 @@ describe('browser console capture', () => {
     const circular: Record<string, unknown> = { token: 'secret-value' };
     circular.self = circular;
 
-    window.console.error.call(context as unknown as Console, 'failed', circular);
+    const result = window.console.error.call(context as unknown as Console, 'failed', circular);
 
+    expect(result).toBe('native-result');
     expect(nativeError).toHaveBeenCalledOnce();
     expect(nativeError.mock.instances[0]).toBe(context);
     expect(nativeError).toHaveBeenCalledWith('failed', circular);
-    const signal = postedSignals(postMessage)[0].signal;
-    expect(signal).toMatchObject({
+    const error = postedErrors(postMessage)[0].error;
+    expect(error).toMatchObject({
       source: { id: 'browser-console', label: 'Browser Console' },
       name: 'console.error',
-      severity: 'error',
       producerSequence: 1,
-      tags: ['browser-console'],
-      details: {
+      payload: {
         arguments: ['failed', { token: '[Redacted]', self: '[Circular]' }],
       },
     });
+    expect(error).not.toHaveProperty('severity');
   });
 
   it('captures uncaught errors with safe stack, cause, and URL details', () => {
@@ -56,9 +56,9 @@ describe('browser console capture', () => {
       error,
     }));
 
-    expect(postedSignals(postMessage)[0].signal).toMatchObject({
+    expect(postedErrors(postMessage)[0].error).toMatchObject({
       name: 'runtime.uncaught-error',
-      details: {
+      payload: {
         message: 'Uncaught Error: outer',
         filename: 'https://example.test/app.js',
         lineNumber: 12,
@@ -85,17 +85,17 @@ describe('browser console capture', () => {
     window.dispatchEvent(rejectionEvent('plain failure'));
     window.dispatchEvent(rejectionEvent(new Error('rejected')));
 
-    const signals = postedSignals(postMessage).map((message) => message.signal);
-    expect(signals).toHaveLength(2);
-    expect(signals[0]).toMatchObject({
+    const errors = postedErrors(postMessage).map((message) => message.error);
+    expect(errors).toHaveLength(2);
+    expect(errors[0]).toMatchObject({
       name: 'runtime.unhandled-rejection',
       producerSequence: 1,
-      details: { reason: 'plain failure' },
+      payload: { reason: 'plain failure' },
     });
-    expect(signals[1]).toMatchObject({
+    expect(errors[1]).toMatchObject({
       name: 'runtime.unhandled-rejection',
       producerSequence: 2,
-      details: { reason: { name: 'Error', message: 'rejected' } },
+      payload: { reason: { name: 'Error', message: 'rejected' } },
     });
   });
 
@@ -116,12 +116,12 @@ describe('browser console capture', () => {
 
     frameConsole.error('frame failure');
 
-    const topSignal = postedSignals(topPostMessage)[0].signal;
-    const frameSignal = postedSignals(framePostMessage)[0].signal;
-    expect(topSignal.details).toEqual({ arguments: ['[Truncated]'] });
-    expect(topSignal.producerSequence).toBe(1);
-    expect(frameSignal.producerSequence).toBe(1);
-    expect(frameSignal.producerId).not.toBe(topSignal.producerId);
+    const topError = postedErrors(topPostMessage)[0].error;
+    const frameError = postedErrors(framePostMessage)[0].error;
+    expect(topError.payload).toEqual({ arguments: ['[Truncated]'] });
+    expect(topError.producerSequence).toBe(1);
+    expect(frameError.producerSequence).toBe(1);
+    expect(frameError.producerId).not.toBe(topError.producerId);
   });
 
   it('is idempotent and restores only its own console wrapper', () => {
@@ -136,7 +136,7 @@ describe('browser console capture', () => {
 
     expect(firstStop).toBe(secondStop);
     expect(nativeError).toHaveBeenCalledOnce();
-    expect(postedSignals(postMessage)).toHaveLength(1);
+    expect(postedErrors(postMessage)).toHaveLength(1);
 
     const replacement = vi.fn();
     window.console.error = replacement;
@@ -151,8 +151,8 @@ function rejectionEvent(reason: unknown): PromiseRejectionEvent {
   return event as PromiseRejectionEvent;
 }
 
-function postedSignals(
+function postedErrors(
   postMessage: { mock: { calls: unknown[][] } },
-): KoshkoWindowMessageV1[] {
-  return postMessage.mock.calls.map((call) => call[0] as KoshkoWindowMessageV1);
+): KoshkoErrorWindowMessageV1[] {
+  return postMessage.mock.calls.map((call) => call[0] as KoshkoErrorWindowMessageV1);
 }

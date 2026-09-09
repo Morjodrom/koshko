@@ -1,12 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import {
   isKoshkoProtocolWindowMessageV1,
+  isKoshkoErrorV1,
   isKoshkoSignalV1,
   isKoshkoStateMutationV1,
   isKoshkoWindowMessageV1,
   koshkoSignalV1JsonSchema,
+  koshkoErrorV1JsonSchema,
   koshkoStateMutationV1JsonSchema,
   parseKoshkoProtocolWindowMessageV1,
+  parseKoshkoErrorWindowMessageV1,
   parseKoshkoWindowMessageV1,
 } from './index';
 
@@ -55,6 +58,68 @@ describe('protocol validation', () => {
         patch: { type: 'array' },
       },
     });
+    expect(koshkoErrorV1JsonSchema).toMatchObject({
+      title: 'KoshkoErrorV1',
+      required: expect.arrayContaining(['source', 'name', 'payload']),
+      properties: {
+        protocol: { const: 'koshko' },
+        version: { const: 1 },
+      },
+    });
+  });
+
+  it('parses errors as a separate discriminated message and normalizes payloads', () => {
+    const error = {
+      protocol: 'koshko',
+      version: 1,
+      id: 'error-1',
+      producerId: 'browser-console:frame-1',
+      producerSequence: 1,
+      occurredAt: 10,
+      source: { id: 'browser-console', label: 'Browser Console' },
+      name: 'console.error',
+      payload: { arguments: [{ token: 'secret' }] },
+    };
+    const message = { protocol: 'koshko', version: 1, type: 'error', error };
+
+    expect(isKoshkoErrorV1(error)).toBe(true);
+    expect(isKoshkoProtocolWindowMessageV1(message)).toBe(true);
+    expect(isKoshkoWindowMessageV1(message)).toBe(false);
+    expect(parseKoshkoErrorWindowMessageV1(message)?.error.payload).toEqual({
+      arguments: [{ token: '[Redacted]' }],
+    });
+    expect(parseKoshkoProtocolWindowMessageV1(message)?.type).toBe('error');
+  });
+
+  it('rejects malformed and getter-backed errors without invoking getters', () => {
+    const error = {
+      protocol: 'koshko',
+      version: 1,
+      id: 'error-1',
+      producerId: 'browser-console',
+      producerSequence: 1,
+      occurredAt: 10,
+      source: { id: 'browser-console' },
+      name: 'console.error',
+      payload: { arguments: [] },
+    };
+
+    expect(isKoshkoErrorV1({ ...error, payload: undefined })).toBe(false);
+    expect(isKoshkoErrorV1({ ...error, producerSequence: 0 })).toBe(false);
+    expect(isKoshkoErrorV1({ ...error, name: 'x'.repeat(129) })).toBe(false);
+
+    let getterInvoked = false;
+    const source = {};
+    Object.defineProperty(source, 'id', {
+      enumerable: true,
+      get() {
+        getterInvoked = true;
+        throw new Error('must not run');
+      },
+    });
+    expect(() => isKoshkoErrorV1({ ...error, source })).not.toThrow();
+    expect(isKoshkoErrorV1({ ...error, source })).toBe(false);
+    expect(getterInvoked).toBe(false);
   });
 
   it('parses state mutations as a separate discriminated message', () => {

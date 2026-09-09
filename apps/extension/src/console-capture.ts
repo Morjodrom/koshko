@@ -1,7 +1,7 @@
 import {
-  createKoshkoWindowMessageV1,
+  createKoshkoErrorWindowMessageV1,
   normalizeJsonValue,
-  normalizeKoshkoSignalV1,
+  normalizeKoshkoErrorV1,
   type JsonValue,
 } from '@koshko/protocol';
 
@@ -26,34 +26,33 @@ export function startConsoleCapture(target: Window = window): () => void {
 
   const producerId = `browser-console:${createUniqueId(target)}`;
   let producerSequence = 0;
-  const emit = (name: string, details: JsonValue): void => {
+  const emit = (name: string, payload: JsonValue): void => {
     try {
       producerSequence += 1;
-      const signal = normalizeKoshkoSignalV1({
+      const error = normalizeKoshkoErrorV1({
         id: `${producerId}:${producerSequence}`,
         producerId,
         producerSequence,
         occurredAt: getTimestamp(target),
         source: CONSOLE_ACTOR,
         name,
-        severity: 'error',
-        details,
-        tags: ['browser-console'],
+        payload,
       });
-      target.postMessage(createKoshkoWindowMessageV1(signal), '*');
+      target.postMessage(createKoshkoErrorWindowMessageV1(error), '*');
     } catch {
       // Diagnostics must never affect the inspected application.
     }
   };
 
   const originalConsoleError = captureWindow.console.error;
-  const wrappedConsoleError = function (this: Console, ...args: unknown[]): void {
-    Reflect.apply(originalConsoleError, this, args);
+  const wrappedConsoleError = function (this: Console, ...args: unknown[]) {
+    const result = Reflect.apply(originalConsoleError, this, args);
     try {
       emit('console.error', normalizeJsonValue({ arguments: args }));
     } catch {
       // Preserve console.error behavior even for values that resist inspection.
     }
+    return result;
   };
   captureWindow.console.error = wrappedConsoleError;
 

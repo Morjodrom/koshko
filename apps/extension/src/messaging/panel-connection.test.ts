@@ -73,7 +73,13 @@ describe('PanelConnection', () => {
 
     port.emit({ type: PANEL_MESSAGE_READY });
     port.emit({ type: 'koshko:capture', kind: 'signal', captured: { signal: {} } });
-    expect(received).toHaveBeenCalledOnce();
+    port.emit({ type: 'koshko:capture', kind: 'error', captured: { error: {} } });
+    expect(received).toHaveBeenCalledTimes(2);
+    expect(received).toHaveBeenLastCalledWith({
+      type: 'koshko:capture',
+      kind: 'error',
+      captured: { error: {} },
+    });
     expect(connection.status).toBe('connected');
     vi.advanceTimersByTime(PANEL_HEARTBEAT_INTERVAL_MS);
 

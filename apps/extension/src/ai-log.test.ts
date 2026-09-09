@@ -1,4 +1,8 @@
-import type { CapturedSignalV1, CapturedStateMutationV1 } from '@koshko/protocol';
+import type {
+  CapturedErrorV1,
+  CapturedSignalV1,
+  CapturedStateMutationV1,
+} from '@koshko/protocol';
 import { describe, expect, it } from 'vitest';
 import { formatAiLog, type AiLogBudget } from './ai-log';
 
@@ -52,6 +56,29 @@ function mutation(id: string, occurredAt: number): CapturedStateMutationV1 {
   };
 }
 
+function error(id: string, occurredAt: number): CapturedErrorV1 {
+  return {
+    error: {
+      protocol: 'koshko',
+      version: 1,
+      id,
+      producerId: 'browser-console:frame-1',
+      producerSequence: occurredAt,
+      occurredAt,
+      source: { id: 'browser-console', label: 'Browser Console' },
+      name: 'runtime.unhandled-rejection',
+      payload: { reason: { name: 'Error', message: 'rejected' } },
+    },
+    observedAt: occurredAt + 1,
+    tabId: 17,
+    frameId: 2,
+    documentId: 'document-2',
+    navigationId: 'navigation-1',
+    frameUrl: 'https://demo.example.test/frame',
+    frameOrigin: 'https://demo.example.test',
+  };
+}
+
 function dataRecords(text: string): Record<string, unknown>[] {
   const data = text.split('<koshko_data>\n')[1].split('\n</koshko_data>')[0];
   return data.split('\n').map((line) => JSON.parse(line) as Record<string, unknown>);
@@ -98,6 +125,28 @@ describe('formatAiLog', () => {
     expect(records[0]).toMatchObject({ capturedEntries: 0, includedEntries: 0 });
     expect(records.at(-1)).toEqual({ kind: 'current-state', value: {} });
     expect(result.stateStatus).toBe('empty');
+  });
+
+  it('emits errors as compact dedicated records with payload and frame ordering metadata', () => {
+    const result = formatAiLog({
+      entries: [signal('first', 1_000), error('error-1', 1_005)],
+      state: {},
+      budget: 'full',
+    });
+    const record = dataRecords(result.text).find((candidate) => candidate.kind === 'error');
+
+    expect(record).toMatchObject({
+      kind: 'error',
+      id: 'error-1',
+      n: 2,
+      dtMs: 5,
+      source: expect.any(String),
+      name: 'runtime.unhandled-rejection',
+      payload: { reason: { name: 'Error', message: 'rejected' } },
+      frame: expect.any(String),
+      producer: 'browser-console:frame-1',
+      seq: 1005,
+    });
   });
 
   it('keeps the newest chronological suffix within every bounded budget', () => {

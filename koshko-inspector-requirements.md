@@ -103,7 +103,7 @@ flowchart LR
     contentA --> router
     contentB --> router
 
-    router --> repository[Panel signal repository]
+    router --> repository[Panel entry repository]
     repository --> timeline[Actor timeline]
     repository --> logs[Plain log]
     repository --> ai[AI-optimized log]
@@ -116,7 +116,7 @@ The WXT project must contain these logical entrypoints:
 
 1. **DevTools entrypoint** creates a dedicated `Koshko` panel through
    `chrome.devtools.panels.create`.
-2. **Panel application** owns the normalized in-memory signal repository and renders views.
+2. **Panel application** owns the normalized in-memory entry repository and renders views.
 3. **Content script** runs in every permitted frame, validates page messages, enriches them with
    frame metadata, and forwards them to the extension.
 4. **Manifest V3 service worker** routes messages by tab and navigation to the connected panel.
@@ -147,7 +147,7 @@ koshko-inspector/
 The neutral example is mandatory so the project never treats its first integration as the
 architectural core.
 
-## 7. Signal protocol
+## 7. Entry protocol
 
 ### 7.1 Normalized signal
 
@@ -178,6 +178,18 @@ export interface ActorReference {
     label?: string;
     instanceLabel?: string;
 }
+
+export interface KoshkoErrorV1 {
+    protocol: 'koshko';
+    version: 1;
+    id: string;
+    producerId: string;
+    producerSequence: number;
+    occurredAt: number;
+    source: ActorReference;
+    name: 'console.error' | 'runtime.uncaught-error' | 'runtime.unhandled-rejection';
+    payload: JsonValue;
+}
 ```
 
 Requirements:
@@ -192,6 +204,10 @@ Requirements:
 - `causedBy` optionally references a preceding signal ID.
 - Unknown optional fields must be ignored for forward compatibility.
 - A consumer must reject unsupported major protocol versions.
+- Browser JavaScript failures use `KoshkoErrorV1`; they are error-level by definition and do not
+  carry signal severity.
+- `console.error` payloads contain `{ arguments: [...] }`, uncaught-error payloads contain the
+  available error/message/location data, and unhandled-rejection payloads contain `{ reason: ... }`.
 
 ### 7.2 Extension enrichment
 
@@ -201,6 +217,17 @@ extension-owned envelope:
 ```ts
 export interface CapturedSignalV1 {
     signal: KoshkoSignalV1;
+    observedAt: number;
+    tabId: number;
+    frameId: number;
+    documentId?: string;
+    navigationId: string;
+    frameUrl: string;
+    frameOrigin: string;
+}
+
+export interface CapturedErrorV1 {
+    error: KoshkoErrorV1;
     observedAt: number;
     tabId: number;
     frameId: number;
@@ -288,7 +315,7 @@ The emitter and extension must apply defense in depth.
 
 Initial limits:
 
-- maximum serialized signal: 64 KiB;
+- maximum serialized signal or error: 64 KiB;
 - maximum object depth: 8;
 - maximum object properties per level: 200;
 - maximum array length: 500;
@@ -466,9 +493,10 @@ example should log the resulting semantic widget event rather than claiming to o
 
 ## 17. Optional adapters and future representations
 
-Implemented adapters:
+Implemented producers:
 
-- Console adapter for `console.error`, uncaught JavaScript errors, and unhandled promise rejections.
+- Browser error producer for first-class `KoshkoErrorV1` entries from `console.error`, uncaught
+  JavaScript errors, and unhandled promise rejections.
 
 Potential adapters:
 

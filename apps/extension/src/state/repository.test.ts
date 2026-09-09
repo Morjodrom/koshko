@@ -1,5 +1,17 @@
 import { describe, expect, it } from 'vitest';
-import { KoshkoRepository, actorKey, formatDateTime, getActorColumns } from './repository';
+import {
+  KoshkoRepository,
+  actorKey,
+  formatDateTime,
+  getActorColumns,
+  type KoshkoLogEntry,
+} from './repository';
+
+function entryID(entry: KoshkoLogEntry): string {
+  if ('signal' in entry) return entry.signal.id;
+  if ('error' in entry) return entry.error.id;
+  return entry.mutation.id;
+}
 
 describe('koshko inspector repository', () => {
   it('notifies subscribers exactly once for active, paused, and navigation records', () => {
@@ -307,12 +319,12 @@ describe('koshko inspector repository', () => {
       },
     });
 
-    expect(repo.getDisplayLog().map((entry) => ('signal' in entry ? entry.signal.id : entry.mutation.id))).toEqual(['signal-1', 'state-1']);
-    expect(repo.getLog().map((entry) => ('signal' in entry ? entry.signal.id : entry.mutation.id))).toEqual(['signal-1', 'state-1', 'state-invalid']);
+    expect(repo.getDisplayLog().map(entryID)).toEqual(['signal-1', 'state-1']);
+    expect(repo.getLog().map(entryID)).toEqual(['signal-1', 'state-1', 'state-invalid']);
     expect(repo.getDisplayState()).toEqual({ value: 1 });
 
     repo.setPaused(false);
-    expect(repo.getDisplayLog().map((entry) => ('signal' in entry ? entry.signal.id : entry.mutation.id))).toEqual(['signal-1', 'state-1', 'state-invalid']);
+    expect(repo.getDisplayLog().map(entryID)).toEqual(['signal-1', 'state-1', 'state-invalid']);
 
     repo.record({
       ...base,
@@ -322,7 +334,72 @@ describe('koshko inspector repository', () => {
         source: { id: 'host' }, name: 'host.next',
       },
     });
-    expect(repo.getDisplayLog().map((entry) => ('signal' in entry ? entry.signal.id : entry.mutation.id))).toEqual(['signal-next']);
+    expect(repo.getDisplayLog().map(entryID)).toEqual(['signal-next']);
+  });
+
+  it('orders errors with signals, discovers their actors, pauses them, and exports separate counts', () => {
+    const repo = new KoshkoRepository();
+    const base = {
+      tabId: 1,
+      frameId: 0,
+      navigationId: 'nav-a',
+      frameUrl: 'https://example.com',
+      frameOrigin: 'https://example.com',
+    };
+    repo.record({
+      ...base,
+      observedAt: 20,
+      error: {
+        protocol: 'koshko', version: 1, id: 'error-1', producerId: 'console', producerSequence: 1, occurredAt: 20,
+        source: { id: 'browser-console', label: 'Browser Console' }, name: 'console.error', payload: { arguments: ['failed'] },
+      },
+    });
+    repo.record({
+      ...base,
+      observedAt: 10,
+      signal: {
+        protocol: 'koshko', version: 1, id: 'signal-1', producerId: 'host', producerSequence: 1, occurredAt: 10,
+        source: { id: 'host', label: 'Host' }, name: 'host.ready',
+      },
+    });
+
+    expect(repo.getSignals().map((entry) => entry.signal.id)).toEqual(['signal-1']);
+    expect(repo.getTimelineEntries().map(entryID)).toEqual(['signal-1', 'error-1']);
+    expect(getActorColumns(repo.getDisplayTimelineEntries()).map((actor) => actor.key)).toEqual([
+      actorKey({ id: 'host' }),
+      actorKey({ id: 'browser-console' }),
+    ]);
+
+    repo.setPaused(true);
+    repo.record({
+      ...base,
+      observedAt: 30,
+      error: {
+        protocol: 'koshko', version: 1, id: 'error-2', producerId: 'console', producerSequence: 2, occurredAt: 30,
+        source: { id: 'browser-console' }, name: 'runtime.uncaught-error', payload: { message: 'boom' },
+      },
+    });
+    expect(repo.getDisplayTimelineEntries().map(entryID)).toEqual(['signal-1', 'error-1']);
+    expect(repo.getUnreadCount()).toBe(1);
+
+    repo.setPaused(false);
+    expect(repo.getDisplayTimelineEntries().map(entryID)).toEqual(['signal-1', 'error-1', 'error-2']);
+    const [metadata, signalLine, firstErrorLine, secondErrorLine] = repo.exportJsonl().split('\n');
+    expect(JSON.parse(metadata)).toMatchObject({ count: 3, signalCount: 1, errorCount: 2 });
+    expect(JSON.parse(signalLine)).toHaveProperty('signal.id', 'signal-1');
+    expect(JSON.parse(firstErrorLine)).toHaveProperty('error.id', 'error-1');
+    expect(JSON.parse(secondErrorLine)).toHaveProperty('error.id', 'error-2');
+
+    repo.record({
+      ...base,
+      navigationId: 'nav-b',
+      observedAt: 1,
+      error: {
+        protocol: 'koshko', version: 1, id: 'error-next', producerId: 'console', producerSequence: 3, occurredAt: 1,
+        source: { id: 'browser-console' }, name: 'console.error', payload: null,
+      },
+    });
+    expect(repo.getTimelineEntries().map(entryID)).toEqual(['error-next']);
   });
 
   it('records immutable ordered state snapshots only for applied mutations and selects displayed history', () => {
@@ -377,7 +454,7 @@ describe('koshko inspector repository', () => {
       occurredAt: 2,
       label: 'Cart updated',
     });
-    expect(repo.getLog().map((entry) => ('mutation' in entry ? entry.mutation.id : entry.signal.id))).toEqual([
+    expect(repo.getLog().map(entryID)).toEqual([
       'add-cart', 'increment-cart', 'invalid',
     ]);
 

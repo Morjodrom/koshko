@@ -28,9 +28,20 @@ export interface CaptureStateMutationTransportMessage {
   frameOrigin: string;
 }
 
+export interface CaptureErrorTransportMessage {
+  type: typeof PANEL_MESSAGE_CAPTURE;
+  kind: 'error';
+  error: unknown;
+  observedAt: number;
+  navigationId: string;
+  frameUrl: string;
+  frameOrigin: string;
+}
+
 export type CaptureTransportMessage =
   | CaptureSignalTransportMessage
-  | CaptureStateMutationTransportMessage;
+  | CaptureStateMutationTransportMessage
+  | CaptureErrorTransportMessage;
 
 export interface ActivateOriginMessage {
   type: typeof PANEL_MESSAGE_ACTIVATE_ORIGIN;
@@ -76,9 +87,16 @@ export interface PanelStateMutationCaptureMessage {
   captured: import('@koshko/protocol').CapturedStateMutationV1;
 }
 
+export interface PanelErrorCaptureMessage {
+  type: typeof PANEL_MESSAGE_CAPTURE;
+  kind: 'error';
+  captured: import('@koshko/protocol').CapturedErrorV1;
+}
+
 export type PanelCaptureMessage =
   | PanelSignalCaptureMessage
-  | PanelStateMutationCaptureMessage;
+  | PanelStateMutationCaptureMessage
+  | PanelErrorCaptureMessage;
 
 export function parseTabId(value: unknown): number | null {
   if (typeof value !== 'string' || !/^\d+$/.test(value)) return null;

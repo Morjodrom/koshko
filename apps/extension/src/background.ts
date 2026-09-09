@@ -1,5 +1,6 @@
 import {
   normalizeCapturedSignalV1,
+  normalizeCapturedErrorV1,
   normalizeCapturedStateMutationV1,
 } from '@koshko/protocol';
 import {
@@ -97,17 +98,26 @@ async function routeCaptureMessage(message: CaptureTransportMessage, sender: chr
     frameOrigin: message.frameOrigin,
   };
 
-  const payload: PanelCaptureMessage = message.kind === 'signal'
-    ? {
+  let payload: PanelCaptureMessage;
+  if (message.kind === 'signal') {
+    payload = {
       type: PANEL_MESSAGE_CAPTURE,
       kind: 'signal',
       captured: normalizeCapturedSignalV1({ signal: message.signal, ...metadata }),
-    }
-    : {
+    };
+  } else if (message.kind === 'error') {
+    payload = {
+      type: PANEL_MESSAGE_CAPTURE,
+      kind: 'error',
+      captured: normalizeCapturedErrorV1({ error: message.error, ...metadata }),
+    };
+  } else {
+    payload = {
       type: PANEL_MESSAGE_CAPTURE,
       kind: 'state-mutation',
       captured: normalizeCapturedStateMutationV1({ mutation: message.mutation, ...metadata }),
     };
+  }
 
   const ports = panelPorts.get(tabId);
   if (!ports || ports.size === 0) {

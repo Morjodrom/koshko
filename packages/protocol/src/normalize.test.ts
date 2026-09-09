@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import {
   compareCapturedSignals,
+  normalizeCapturedErrorV1,
   normalizeCapturedSignalV1,
   normalizeJsonValue,
+  normalizeKoshkoErrorV1,
   normalizeKoshkoSignalV1,
   normalizeKoshkoStateMutationV1,
 } from './index';
@@ -133,6 +135,68 @@ describe('protocol normalization', () => {
       },
     });
     expect((normalized as Record<string, Record<string, unknown>>).error).not.toHaveProperty('dangerous');
+  });
+
+  it('normalizes error payloads and captured metadata defensively', () => {
+    const cause = new Error('inner');
+    const error = new Error('outer', { cause });
+    const normalized = normalizeKoshkoErrorV1({
+      id: 'error-1',
+      producerId: 'browser-console:frame-1',
+      producerSequence: 1,
+      occurredAt: 123,
+      source: { id: 'browser-console', label: 'Browser Console' },
+      name: 'runtime.unhandled-rejection',
+      payload: {
+        reason: error,
+        token: 'secret',
+        endpointUrl: 'https://example.test/fail?token=secret#stack',
+      },
+    });
+
+    expect(normalized.payload).toMatchObject({
+      reason: {
+        name: 'Error',
+        message: 'outer',
+        stack: expect.any(String),
+        cause: { name: 'Error', message: 'inner', stack: expect.any(String) },
+      },
+      token: '[Redacted]',
+      endpointUrl: 'https://example.test/fail',
+    });
+
+    const captured = normalizeCapturedErrorV1({
+      error: normalized,
+      observedAt: 124,
+      tabId: 17,
+      frameId: 2,
+      documentId: 'document-1',
+      navigationId: 'navigation-1',
+      frameUrl: 'https://example.test/frame?secret=1#hash',
+      frameOrigin: 'https://example.test',
+    });
+    expect(captured).toMatchObject({
+      error: { id: 'error-1' },
+      documentId: 'document-1',
+      frameUrl: 'https://example.test/frame',
+    });
+  });
+
+  it('truncates oversized error payloads', () => {
+    const error = normalizeKoshkoErrorV1({
+      id: 'error-large',
+      producerId: 'browser-console',
+      producerSequence: 1,
+      occurredAt: 1,
+      source: { id: 'browser-console' },
+      name: 'console.error',
+      payload: Object.fromEntries(Array.from(
+        { length: 200 },
+        (_, index) => [`key-${index}`, Array.from({ length: 500 }, () => 'x')],
+      )),
+    });
+
+    expect(error.payload).toBe('[Truncated]');
   });
 
   it('normalizes state mutation labels as bounded identifiers', () => {

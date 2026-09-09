@@ -35,9 +35,14 @@ export function startCapture(): () => void {
       frameUrl: location.href,
       frameOrigin: location.origin,
     };
-    const payload: CaptureTransportMessage = parsed.type === 'signal'
-      ? { type: PANEL_MESSAGE_CAPTURE, kind: 'signal', signal: parsed.signal, ...metadata }
-      : { type: PANEL_MESSAGE_CAPTURE, kind: 'state-mutation', mutation: parsed.mutation, ...metadata };
+    let payload: CaptureTransportMessage;
+    if (parsed.type === 'signal') {
+      payload = { type: PANEL_MESSAGE_CAPTURE, kind: 'signal', signal: parsed.signal, ...metadata };
+    } else if (parsed.type === 'error') {
+      payload = { type: PANEL_MESSAGE_CAPTURE, kind: 'error', error: parsed.error, ...metadata };
+    } else {
+      payload = { type: PANEL_MESSAGE_CAPTURE, kind: 'state-mutation', mutation: parsed.mutation, ...metadata };
+    }
 
     void chrome.runtime.sendMessage(payload).catch(() => {});
   };

@@ -7,7 +7,10 @@ import type {
   ActorReference,
   CapturedStateMutationV1,
   CapturedSignalV1,
+  CapturedErrorV1,
   JsonValue,
+  KoshkoErrorV1,
+  KoshkoErrorWindowMessageV1,
 } from './types';
 import { isStateMutationPath } from './state';
 
@@ -52,20 +55,20 @@ const INVALID_VALUE = '[Invalid]';
 
 export function normalizeActorReference(input: unknown): ActorReference {
   const record = isObjectLike(input) ? input : {};
-  const id = normalizeIdentifier((record as Record<string, unknown>).id, INVALID_VALUE);
+  const id = normalizeIdentifier(readOwnDataProperty(record, 'id'), INVALID_VALUE);
   const result: ActorReference = { id };
 
-  const instanceId = normalizeOptionalIdentifier((record as Record<string, unknown>).instanceId);
+  const instanceId = normalizeOptionalIdentifier(readOwnDataProperty(record, 'instanceId'));
   if (instanceId !== undefined) {
     result.instanceId = instanceId;
   }
 
-  const label = normalizeOptionalText((record as Record<string, unknown>).label);
+  const label = normalizeOptionalText(readOwnDataProperty(record, 'label'));
   if (label !== undefined) {
     result.label = label;
   }
 
-  const instanceLabel = normalizeOptionalText((record as Record<string, unknown>).instanceLabel);
+  const instanceLabel = normalizeOptionalText(readOwnDataProperty(record, 'instanceLabel'));
   if (instanceLabel !== undefined) {
     result.instanceLabel = instanceLabel;
   }
@@ -127,6 +130,26 @@ export function normalizeKoshkoSignalV1(input: unknown): KoshkoSignalV1 {
   return compactSignal(signal);
 }
 
+export function normalizeKoshkoErrorV1(input: unknown): KoshkoErrorV1 {
+  const record = isObjectLike(input) ? input : {};
+  const error: KoshkoErrorV1 = {
+    protocol: 'koshko',
+    version: 1,
+    id: normalizeIdentifier(readOwnDataProperty(record, 'id'), INVALID_VALUE),
+    producerId: normalizeIdentifier(readOwnDataProperty(record, 'producerId'), INVALID_VALUE),
+    producerSequence: normalizePositiveInteger(readOwnDataProperty(record, 'producerSequence'), 1),
+    occurredAt: normalizeTimestamp(readOwnDataProperty(record, 'occurredAt')),
+    source: normalizeActorReference(readOwnDataProperty(record, 'source')),
+    name: normalizeIdentifier(readOwnDataProperty(record, 'name'), INVALID_VALUE),
+    payload: normalizeJsonValue(readOwnDataProperty(record, 'payload')),
+  };
+
+  if (approximateJsonLength(error) > MAX_SERIALIZED_BYTES) {
+    error.payload = TRUNCATED;
+  }
+  return error;
+}
+
 export function normalizeKoshkoStateMutationV1(input: unknown): KoshkoStateMutationV1 {
   const record = isObjectLike(input) ? input : {};
   const mutation: KoshkoStateMutationV1 = {
@@ -175,6 +198,31 @@ export function normalizeCapturedSignalV1(input: unknown): CapturedSignalV1 {
   return captured;
 }
 
+export function normalizeCapturedErrorV1(input: unknown): CapturedErrorV1 {
+  const record = isObjectLike(input) ? input : {};
+  const error = normalizeKoshkoErrorV1(readOwnDataProperty(record, 'error'));
+  const observedAt = normalizeTimestamp(readOwnDataProperty(record, 'observedAt'));
+  const tabId = normalizeFrameNumber(readOwnDataProperty(record, 'tabId'));
+  const frameId = normalizeFrameNumber(readOwnDataProperty(record, 'frameId'));
+  const navigationId = normalizeIdentifier(readOwnDataProperty(record, 'navigationId'), INVALID_VALUE);
+  const frameUrl = normalizeUrlLike(readOwnDataProperty(record, 'frameUrl'));
+  const frameOrigin = normalizeFrameOrigin(readOwnDataProperty(record, 'frameOrigin'), frameUrl);
+  const captured: CapturedErrorV1 = {
+    error,
+    observedAt,
+    tabId,
+    frameId,
+    navigationId,
+    frameUrl,
+    frameOrigin,
+  };
+  const documentId = normalizeOptionalIdentifier(readOwnDataProperty(record, 'documentId'));
+  if (documentId !== undefined) {
+    captured.documentId = documentId;
+  }
+  return captured;
+}
+
 export function normalizeCapturedStateMutationV1(input: unknown): CapturedStateMutationV1 {
   const record = isObjectLike(input) ? input : {};
   const mutation = normalizeKoshkoStateMutationV1(record.mutation);
@@ -209,6 +257,15 @@ export function createKoshkoWindowMessageV1(signal: KoshkoSignalV1): KoshkoWindo
     version: 1,
     type: 'signal',
     signal,
+  };
+}
+
+export function createKoshkoErrorWindowMessageV1(error: KoshkoErrorV1): KoshkoErrorWindowMessageV1 {
+  return {
+    protocol: 'koshko',
+    version: 1,
+    type: 'error',
+    error,
   };
 }
 
