@@ -54,11 +54,43 @@ runtime version.
 
 ## Consumer pattern
 
-Install only the adapter required by the project:
+### Tarball pilot
+
+The Koshko packages are not in a registry during the pilot. Obtain the three
+artifacts produced by `npm run pack:packages`, copy them into or next to the
+consumer project, and install them **together in one command**:
+
+```bash
+npm install --save-dev \
+  ./artifacts/koshko-protocol-0.1.0.tgz \
+  ./artifacts/koshko-emitter-0.1.0.tgz \
+  ./artifacts/koshko-nanostores-0.1.0.tgz
+```
+
+Installing only the Nanostores tarball does not work during the pilot: its
+`@koshko/emitter` and `@koshko/protocol` dependencies are not available from a
+registry yet. The three-package install lets npm resolve the complete local
+chain. The application does not need to import protocol or emitter directly.
+
+The tarballs are development dependencies and must be available in the
+frontend build environment. They do not need to be copied into the deployed
+static assets or runtime image.
+
+See [`package-distribution.md`](package-distribution.md) for instructions on
+building and inspecting the artifacts.
+
+### Registry distribution
+
+After all three packages are published to the configured npm registry, install
+only the adapter required by the project:
 
 ```bash
 npm install --save-dev @koshko/nanostores
 ```
+
+npm will install emitter and protocol transitively.
+
+### Application setup
 
 Keep its import in a dedicated development module and load that module behind
 a compile-time development flag:

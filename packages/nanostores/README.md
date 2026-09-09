@@ -14,20 +14,32 @@ during inspection.
 
 ## Install
 
-Install the adapter as a development dependency. The application remains the
-owner of its Nano Stores version; the adapter does not install another copy.
+During the tarball pilot, obtain all three Koshko artifacts and install them
+together from the consumer project:
+
+```bash
+npm install --save-dev \
+  ./artifacts/koshko-protocol-0.1.0.tgz \
+  ./artifacts/koshko-emitter-0.1.0.tgz \
+  ./artifacts/koshko-nanostores-0.1.0.tgz
+```
+
+Install all three in the same command because emitter and protocol are not yet
+available from a registry. The application imports only
+`@koshko/nanostores`; the other packages satisfy its transitive dependencies.
+
+After registry publication, the installation becomes:
 
 ```bash
 npm install --save-dev @koshko/nanostores
 ```
 
-Development dependencies must be present while the frontend is built. They can
-be omitted from the final deployed image after static assets are produced.
-
-During the tarball pilot, install the complete local package chain as described
-in [`docs/package-distribution.md`](../../docs/package-distribution.md). After
-registry publication, installing `@koshko/nanostores` alone will bring in the
-emitter and protocol transitively.
+The application remains the owner of its Nano Stores version; the adapter does
+not install another copy. Development dependencies must be present while the
+frontend is built, but can be omitted from the final deployed image after
+static assets are produced. See
+[`docs/package-distribution.md`](../../docs/package-distribution.md) for
+artifact production and inspection.
 
 ## Development-only entry
 
