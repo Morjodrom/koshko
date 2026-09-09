@@ -10,7 +10,7 @@ import {
   formatActor,
   formatTime,
   type KoshkoTimelineActor,
-} from './repository';
+} from '../state/repository';
 
 export const TIMELINE_LANE_WIDTH = 220;
 export const TIMELINE_ROW_HEIGHT = 43;

@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createPanelAccessController } from './panel-access';
-import { PANEL_MESSAGE_ACTIVATE_ORIGIN } from './shared';
+import { PANEL_MESSAGE_ACTIVATE_ORIGIN } from '../messaging/messages';
 
 describe('panel access controller', () => {
   afterEach(() => vi.unstubAllGlobals());

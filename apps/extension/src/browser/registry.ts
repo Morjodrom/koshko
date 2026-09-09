@@ -1,4 +1,4 @@
-import { CONTENT_SCRIPT_JS_PATH, CONTENT_SCRIPT_ID_PREFIX, STORAGE_KEY } from './shared';
+import { CONTENT_SCRIPT_JS_PATH, CONTENT_SCRIPT_ID_PREFIX, STORAGE_KEY } from '../messaging/messages';
 import { normalizeOriginList, originToMatchPattern, originToScriptId } from './origins';
 
 export async function getStoredOrigins(): Promise<string[]> {

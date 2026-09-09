@@ -3,7 +3,7 @@ import { requestSitePermission } from './permission-coordinator';
 import {
   PANEL_MESSAGE_ACTIVATE_ORIGIN,
   type ActivationResponse,
-} from './shared';
+} from '../messaging/messages';
 
 export interface InspectedSite {
   origin: string;

@@ -1,15 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { normalizeOrigin, normalizeOriginList, originToMatchPattern, originToScriptId } from './origins';
-import { parseTabId } from './shared';
+import {
+  normalizeOrigin,
+  normalizeOriginList,
+  originToMatchPattern,
+  originToScriptId,
+} from './origins';
 
-describe('extension transport helpers', () => {
-  it('parses only non-negative integer tab ids', () => {
-    expect(parseTabId('0')).toBe(0);
-    expect(parseTabId('17')).toBe(17);
-    for (const value of [null, undefined, '', ' ', '-1', '1.5', 'abc', '1e2']) {
-      expect(parseTabId(value)).toBeNull();
-    }
-  });
+describe('origin helpers', () => {
   it('normalizes origins and creates stable content-script ids', () => {
     expect(normalizeOrigin('https://example.com/path?x=1')).toBe('https://example.com');
     expect(originToMatchPattern('https://example.com')).toBe('https://example.com/*');

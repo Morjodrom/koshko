@@ -5,7 +5,7 @@ import {
   parseTabId,
   type BackgroundToPanelControlMessage,
   type PanelToBackgroundControlMessage,
-} from './shared';
+} from './messages';
 
 export interface BackgroundPanelPort {
   name: string;

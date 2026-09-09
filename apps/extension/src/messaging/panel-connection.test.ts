@@ -6,7 +6,7 @@ import {
   PanelConnection,
   type PanelConnectionPort,
 } from './panel-connection';
-import { PANEL_MESSAGE_HEARTBEAT, PANEL_MESSAGE_READY } from './shared';
+import { PANEL_MESSAGE_HEARTBEAT, PANEL_MESSAGE_READY } from './messages';
 
 class FakePort implements PanelConnectionPort {
   private readonly messageListeners = new Set<(message: unknown) => void>();

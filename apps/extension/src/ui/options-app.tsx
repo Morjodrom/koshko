@@ -2,9 +2,9 @@ import { useEffect, useState, type FormEvent, type ReactElement } from 'react';
 import {
   PANEL_MESSAGE_ACTIVATE_ORIGIN,
   PANEL_MESSAGE_RECONCILE_PERMISSIONS,
-} from './shared';
-import { getStoredOrigins } from './registry';
-import { normalizeOrigin, originToMatchPattern } from './origins';
+} from '../messaging/messages';
+import { getStoredOrigins } from '../browser/registry';
+import { normalizeOrigin, originToMatchPattern } from '../browser/origins';
 import { BrandLockup, Icon } from './brand';
 
 export function OptionsApp(): ReactElement {

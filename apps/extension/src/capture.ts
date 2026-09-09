@@ -2,7 +2,7 @@ import { parseKoshkoProtocolWindowMessageV1 } from '@koshko/protocol';
 import {
   PANEL_MESSAGE_CAPTURE,
   type CaptureTransportMessage,
-} from './shared';
+} from './messaging/messages';
 
 const CAPTURE_STATE = Symbol.for('koshko.capture.v1');
 

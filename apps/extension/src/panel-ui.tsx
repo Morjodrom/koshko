@@ -1,10 +1,10 @@
 import { createRoot } from 'react-dom/client';
-import { PanelApp } from './panel-app';
-import { PANEL_PORT_PREFIX, parseTabId } from './shared';
-import { KoshkoRepository } from './repository';
-import { createPanelAccessController } from './panel-access';
-import { PanelConnection, type PanelConnectionPort } from './panel-connection';
-import './ui.css';
+import { PanelApp } from './ui/panel-app';
+import { PANEL_PORT_PREFIX, parseTabId } from './messaging/messages';
+import { KoshkoRepository } from './state/repository';
+import { createPanelAccessController } from './browser/panel-access';
+import { PanelConnection, type PanelConnectionPort } from './messaging/panel-connection';
+import './ui/ui.css';
 
 const mountTarget = document.querySelector<HTMLDivElement>('#app');
 if (!mountTarget) throw new Error('Panel UI root is missing.');

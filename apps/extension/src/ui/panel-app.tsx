@@ -10,7 +10,7 @@ import type {
   CapturedSignalV1,
   JsonObject,
 } from '@koshko/protocol';
-import type { PanelCaptureMessage } from './shared';
+import type { PanelCaptureMessage } from '../messaging/messages';
 import {
   KoshkoRepository,
   actorKey,
@@ -21,15 +21,15 @@ import {
   type KoshkoLogEntry,
   type KoshkoStateSnapshot,
   type KoshkoTimelineActor,
-} from './repository';
+} from '../state/repository';
 import type {
   InspectedSite,
   PanelAccessController,
   PanelAccessSnapshot,
-} from './panel-access';
+} from '../browser/panel-access';
 import { BrandLockup, Icon } from './brand';
 import { GlobalStateViewer } from './global-state-viewer';
-import type { ManagedPanelConnection, PanelConnectionStatus } from './panel-connection';
+import type { ManagedPanelConnection, PanelConnectionStatus } from '../messaging/panel-connection';
 import { Timeline } from './timeline';
 
 export interface PanelAppProps {

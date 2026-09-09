@@ -4,7 +4,7 @@ import {
   type BackgroundPanelPort,
   type PanelPortsByTab,
 } from './panel-port-router';
-import { PANEL_MESSAGE_HEARTBEAT, PANEL_MESSAGE_READY, PANEL_PORT_PREFIX } from './shared';
+import { PANEL_MESSAGE_HEARTBEAT, PANEL_MESSAGE_READY, PANEL_PORT_PREFIX } from './messages';
 
 class FakeBackgroundPanelPort implements BackgroundPanelPort {
   private readonly messageListeners = new Set<(message: unknown) => void>();

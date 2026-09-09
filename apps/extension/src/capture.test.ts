@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { startCapture } from './capture';
-import { PANEL_MESSAGE_CAPTURE } from './shared';
+import { PANEL_MESSAGE_CAPTURE } from './messaging/messages';
 
 describe('window capture', () => {
   const cleanups: Array<() => void> = [];

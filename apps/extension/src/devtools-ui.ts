@@ -1,4 +1,4 @@
-import { installNativeHostAccessLifecycle } from './native-access';
+import { installNativeHostAccessLifecycle } from './browser/native-access';
 
 const tabId = chrome.devtools.inspectedWindow.tabId;
 const panelUrl = new URL(chrome.runtime.getURL('panel.html'));

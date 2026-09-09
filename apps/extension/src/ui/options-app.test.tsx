@@ -11,7 +11,7 @@ import {
   PANEL_MESSAGE_ACTIVATE_ORIGIN,
   PANEL_MESSAGE_RECONCILE_PERMISSIONS,
   STORAGE_KEY,
-} from './shared';
+} from '../messaging/messages';
 
 describe('OptionsApp', () => {
   let origins: string[];

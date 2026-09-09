@@ -8,16 +8,16 @@ import {
   within,
 } from '@testing-library/react';
 import type { CapturedSignalV1, CapturedStateMutationV1 } from '@koshko/protocol';
-import type { PanelCaptureMessage } from './shared';
+import type { PanelCaptureMessage } from '../messaging/messages';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { PanelApp } from './panel-app';
-import type { ManagedPanelConnection, PanelConnectionStatus } from './panel-connection';
-import type { PanelAccessController, PanelAccessSnapshot } from './panel-access';
-import type { PanelAccessChange } from './panel-access';
-import { formatDateTime, formatTime, KoshkoRepository } from './repository';
+import type { ManagedPanelConnection, PanelConnectionStatus } from '../messaging/panel-connection';
+import type { PanelAccessController, PanelAccessSnapshot } from '../browser/panel-access';
+import type { PanelAccessChange } from '../browser/panel-access';
+import { formatDateTime, formatTime, KoshkoRepository } from '../state/repository';
 import {
   PANEL_MESSAGE_CAPTURE,
-} from './shared';
+} from '../messaging/messages';
 
 class FakePanelConnection implements ManagedPanelConnection {
   private readonly messageListeners = new Set<

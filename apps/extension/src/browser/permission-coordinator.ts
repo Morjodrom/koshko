@@ -1,6 +1,6 @@
 import { normalizeOriginList, matchPatternToOrigin, normalizeOrigin, originToMatchPattern } from './origins';
 import { getStoredOrigins, setStoredOrigins, syncRegisteredContentScripts } from './registry';
-import { CONTENT_SCRIPT_JS_PATH, type ActivationResponse } from './shared';
+import { CONTENT_SCRIPT_JS_PATH, type ActivationResponse } from '../messaging/messages';
 
 export class PermissionCoordinator {
   private queue: Promise<void> = Promise.resolve();

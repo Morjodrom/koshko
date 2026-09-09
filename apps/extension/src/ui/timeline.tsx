@@ -22,7 +22,7 @@ import {
 import '@xyflow/react/dist/style.css';
 import type { CapturedSignalV1 } from '@koshko/protocol';
 import { Icon } from './brand';
-import { formatActor, type KoshkoTimelineActor } from './repository';
+import { formatActor, type KoshkoTimelineActor } from '../state/repository';
 import {
   TIMELINE_LANE_WIDTH,
   createTimelineLayout,

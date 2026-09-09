@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { handleActionClick, PermissionCoordinator } from './permission-coordinator';
-import { CONTENT_SCRIPT_JS_PATH, STORAGE_KEY } from './shared';
+import { CONTENT_SCRIPT_JS_PATH, STORAGE_KEY } from '../messaging/messages';
 
 interface FakeChromeState {
   stored: string[];

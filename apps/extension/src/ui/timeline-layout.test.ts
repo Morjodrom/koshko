@@ -1,6 +1,6 @@
 import type { CapturedSignalV1 } from '@koshko/protocol';
 import { describe, expect, it, vi } from 'vitest';
-import type { KoshkoTimelineActor } from './repository';
+import type { KoshkoTimelineActor } from '../state/repository';
 import {
   TIMELINE_DETAIL_HEIGHT,
   TIMELINE_LANE_WIDTH,

@@ -9,9 +9,9 @@ import {
   type CaptureTransportMessage,
   type BackgroundMessage,
   type PanelCaptureMessage,
-} from './shared';
-import { handleActionClick, PermissionCoordinator } from './permission-coordinator';
-import { registerPanelPort, type PanelPortsByTab } from './panel-port-router';
+} from './messaging/messages';
+import { handleActionClick, PermissionCoordinator } from './browser/permission-coordinator';
+import { registerPanelPort, type PanelPortsByTab } from './messaging/panel-port-router';
 
 const panelPorts: PanelPortsByTab = new Map();
 const permissionCoordinator = new PermissionCoordinator();

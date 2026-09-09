@@ -1,9 +1,9 @@
-import type { PanelCaptureMessage } from './shared';
+import type { PanelCaptureMessage } from './messages';
 import {
   PANEL_MESSAGE_CAPTURE,
   PANEL_MESSAGE_HEARTBEAT,
   PANEL_MESSAGE_READY,
-} from './shared';
+} from './messages';
 
 export const PANEL_HEARTBEAT_INTERVAL_MS = 20_000;
 export const PANEL_READY_TIMEOUT_MS = 5_000;
