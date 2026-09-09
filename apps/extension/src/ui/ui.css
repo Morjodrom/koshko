@@ -202,6 +202,7 @@ button.ghost { background: transparent; }
 .log-entry-kind.state { background: color-mix(in srgb, var(--noir-muted) 18%, var(--noir-surface-raised)); color: var(--noir-muted); }
 .log-entry-kind.error { background: color-mix(in srgb, #bd3a45 18%, var(--noir-surface-raised)); color: #bd3a45; }
 .log-entry-source { color: var(--noir-muted); font-family: Inter, ui-sans-serif, system-ui, sans-serif; font-size: .78rem; font-weight: 650; }
+.log-entry-machine-name { color: #bd3a45; font-size: .72rem; font-weight: 650; }
 .log-item pre { margin-top: 12px; border-top: 1px solid var(--noir-line); padding-inline: 0; padding-bottom: 0; }
 .log-empty-payload { margin-top: 12px; border-top: 1px solid var(--noir-line); padding-top: 12px; font-size: .82rem; }
 .ai-log { display: grid; gap: 12px; }

@@ -1,6 +1,7 @@
 import type { JsonObject, JsonValue } from '@koshko/protocol';
 import {
   actorKey,
+  getErrorDisplayMessage,
   isCapturedError,
   isCapturedSignal,
   type KoshkoLogEntry,
@@ -244,6 +245,7 @@ function compactEntry(
       seq: entry.error.producerSequence,
       source,
       name: entry.error.name,
+      message: getErrorDisplayMessage(entry.error),
       payload: entry.error.payload,
       frame,
     });

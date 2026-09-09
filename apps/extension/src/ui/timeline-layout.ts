@@ -8,6 +8,7 @@ import {
   actorKey,
   formatActor,
   formatTime,
+  getErrorDisplayMessage,
   isCapturedError,
   isCapturedSignal,
   type KoshkoTimelineActor,
@@ -31,6 +32,7 @@ export interface TimelineEventNodeData extends Record<string, unknown> {
   entryId: string;
   entryType: 'signal' | 'error';
   name: string;
+  machineName: string;
   severity: TimelineSeverity;
   expanded: boolean;
   direction: 'forward' | 'reverse' | 'internal';
@@ -112,6 +114,7 @@ export function createTimelineLayout({
     const isSignal = isCapturedSignal(captured);
     const metadata = isSignal ? captured.signal : captured.error;
     const entryType = isSignal ? 'signal' : 'error';
+    const displayName = isSignal ? metadata.name : getErrorDisplayMessage(captured.error);
     const target = isSignal ? captured.signal.target : undefined;
     const sourceKey = actorKey(metadata.source);
     const targetKey = target ? actorKey(target) : null;
@@ -126,7 +129,7 @@ export function createTimelineLayout({
     const directionLabel = hasArrow && target
       ? `${formatActor(metadata.source)} sends ${metadata.name} to ${formatActor(target)}`
       : isCapturedError(captured)
-        ? `${formatActor(metadata.source)} records error ${metadata.name}`
+        ? `${formatActor(metadata.source)} records ${metadata.name}: ${displayName}`
         : `${formatActor(metadata.source)} records internal event ${metadata.name}`;
     const severity = isCapturedError(captured) ? 'error' : captured.signal.severity ?? 'info';
     const eventId = `event:${metadata.id}`;
@@ -151,7 +154,8 @@ export function createTimelineLayout({
         kind: 'event',
         entryId: metadata.id,
         entryType,
-        name: metadata.name,
+        name: displayName,
+        machineName: metadata.name,
         severity,
         expanded: expandedEntryIds.has(metadata.id),
         direction,

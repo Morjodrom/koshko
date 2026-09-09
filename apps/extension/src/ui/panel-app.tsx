@@ -16,6 +16,7 @@ import {
   actorKey,
   formatActor,
   formatDateTime,
+  getErrorDisplayMessage,
   getActorColumns,
   isCapturedError,
   isCapturedSignal,
@@ -798,6 +799,7 @@ function Log({
           open={index === entries.length - 1}
           data-log-entry-type={entryType}
           data-entry-name={getLogEntryName(entry)}
+          data-error-name={isCapturedError(entry) ? entry.error.name : undefined}
           data-signal-name={isCapturedSignal(entry) ? entry.signal.name : undefined}
           key={`${type}-${metadata.id}`}
         >
@@ -805,6 +807,9 @@ function Log({
             <span className="log-summary-title">
               <span className={`log-entry-kind ${entryType}`}>{type}</span>
               {' '}{getLogEntryName(entry)}
+              {isCapturedError(entry) && getLogEntryName(entry) !== entry.error.name
+                ? <span className="log-entry-machine-name"> · {entry.error.name}</span>
+                : null}
               {source === undefined ? null : <span className="log-entry-source"> · {formatActor(source)}</span>}
             </span>
             <span className="muted">
@@ -845,7 +850,7 @@ function getLogEntryMetadata(entry: KoshkoLogEntry): {
 
 function getLogEntryName(entry: KoshkoLogEntry): string {
   if (isCapturedSignal(entry)) return entry.signal.name;
-  if (isCapturedError(entry)) return entry.error.name;
+  if (isCapturedError(entry)) return getErrorDisplayMessage(entry.error);
   return entry.mutation.label ?? 'state mutation';
 }
 

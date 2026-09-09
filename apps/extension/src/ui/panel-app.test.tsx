@@ -132,7 +132,11 @@ function capturedError(overrides: Partial<CapturedErrorV1> = {}): CapturedErrorV
       occurredAt: Date.parse('2026-09-05T12:34:56.789Z'),
       source: { id: 'browser-console', label: 'Browser Console' },
       name: 'console.error',
-      payload: { arguments: ['Checkout failed', { code: 'PAYMENT_ERROR' }] },
+      payload: {
+        message: 'Checkout failed',
+        stack: 'Error: Checkout failed\n    at checkout.js:1:1',
+        arguments: ['Checkout failed', { code: 'PAYMENT_ERROR' }],
+      },
     },
     observedAt: Date.parse('2026-09-05T12:34:56.790Z'),
     tabId: 17,
@@ -565,10 +569,12 @@ describe('PanelApp', () => {
     act(() => port.emitError(consoleError));
 
     expect(screen.getByTestId('timeline').textContent).toContain('Browser Console');
-    expect(screen.getByTestId('timeline').textContent).toContain('console.error');
+    expect(screen.getByTestId('timeline').textContent).toContain('Checkout failed');
     const timelineError = document.querySelector<HTMLElement>('[data-entry-type="error"]')!;
     expect(timelineError.closest('.react-flow__node')?.classList).toContain('entry-error');
     expect(timelineError.textContent).toContain('Error');
+    expect(timelineError.textContent).toContain('Checkout failed');
+    expect(timelineError.dataset.errorName).toBe('console.error');
     expect(timelineError.dataset.signalName).toBeUndefined();
 
     fireEvent.click(screen.getByRole('button', { name: 'Log' }));
@@ -577,13 +583,20 @@ describe('PanelApp', () => {
     const errorRow = document.querySelector<HTMLElement>('[data-log-entry-type="error"]')!;
     expect(errorRow.classList).toContain('error');
     expect(within(errorRow).getByText('Error')).toBeTruthy();
+    expect(errorRow.textContent).toContain('Checkout failed');
+    expect(errorRow.textContent).toContain('console.error');
+    expect(errorRow.textContent).toContain('checkout.js:1:1');
     expect(errorRow.textContent).toContain('PAYMENT_ERROR');
     expect(errorRow.textContent).not.toContain('"protocol"');
 
     fireEvent.change(screen.getByRole('searchbox', { name: 'Search log' }), {
       target: { value: 'checkout failed' },
     });
-    expect(screen.getByTestId('log').textContent).toContain('console.error');
+    expect(screen.getByTestId('log').textContent).toContain('Checkout failed');
+    fireEvent.change(screen.getByRole('searchbox', { name: 'Search log' }), {
+      target: { value: 'checkout.js:1:1' },
+    });
+    expect(screen.getByTestId('log').textContent).toContain('Checkout failed');
 
     fireEvent.click(screen.getByRole('button', { name: 'AI Log' }));
     const aiLog = screen.getByRole('textbox', { name: 'AI-ready Koshko log' }) as HTMLTextAreaElement;

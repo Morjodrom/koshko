@@ -206,8 +206,15 @@ Requirements:
 - A consumer must reject unsupported major protocol versions.
 - Browser JavaScript failures use `KoshkoErrorV1`; they are error-level by definition and do not
   carry signal severity.
-- `console.error` payloads contain `{ arguments: [...] }`, uncaught-error payloads contain the
-  available error/message/location data, and unhandled-rejection payloads contain `{ reason: ... }`.
+- `console.error` payloads contain `{ message, stack?, arguments }`, uncaught-error payloads contain
+  `{ message, stack?, filename, lineNumber, columnNumber, error }`, and unhandled-rejection payloads
+  contain `{ message, stack?, reason }`.
+- Browser error payloads promote an available human-readable `message` and real `Error` stack to
+  top-level payload fields. Browser `Event` arguments are represented by safe diagnostic fields
+  instead of opaque type markers; no stack is synthesized when the page supplies no real error.
+- Timeline and Log use the promoted message as the primary error title while retaining the stable
+  machine name (`console.error`, `runtime.uncaught-error`, or `runtime.unhandled-rejection`) as
+  secondary diagnostic metadata.
 
 ### 7.2 Extension enrichment
 

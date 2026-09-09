@@ -64,7 +64,11 @@ function capturedError(): CapturedErrorV1 {
       occurredAt: Date.parse('2026-09-05T12:34:56.789Z'),
       source: { id: 'browser-console', label: 'Browser Console' },
       name: 'console.error',
-      payload: { arguments: ['failed'] },
+      payload: {
+        message: 'Checkout failed',
+        stack: 'Error: Checkout failed\n    at checkout.js:1:1',
+        arguments: ['failed'],
+      },
     },
     observedAt: Date.parse('2026-09-05T12:34:56.790Z'),
     tabId: 17,
@@ -144,7 +148,8 @@ describe('createTimelineLayout', () => {
     expect(node.data).toMatchObject({
       entryType: 'error',
       direction: 'internal',
-      name: 'console.error',
+      name: 'Checkout failed',
+      machineName: 'console.error',
     });
     expect(result.edges).toHaveLength(0);
     expect(result.timestamps[0].source).toBe('Browser Console');

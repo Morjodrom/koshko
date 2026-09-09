@@ -48,7 +48,7 @@ export function startConsoleCapture(target: Window = window): () => void {
   const wrappedConsoleError = function (this: Console, ...args: unknown[]) {
     const result = Reflect.apply(originalConsoleError, this, args);
     try {
-      emit('console.error', normalizeJsonValue({ arguments: args }));
+      emit('console.error', createConsoleErrorPayload(args, target));
     } catch {
       // Preserve console.error behavior even for values that resist inspection.
     }
@@ -61,8 +61,10 @@ export function startConsoleCapture(target: Window = window): () => void {
       if (typeof event.message !== 'string') {
         return;
       }
+      const errorInfo = getErrorInfo(event.error);
       emit('runtime.uncaught-error', normalizeJsonValue({
-        message: event.message,
+        message: errorInfo?.message ?? (event.message.trim() || 'Uncaught error'),
+        ...(errorInfo?.stack === undefined ? {} : { stack: errorInfo.stack }),
         filename: event.filename,
         lineNumber: event.lineno,
         columnNumber: event.colno,
@@ -74,7 +76,16 @@ export function startConsoleCapture(target: Window = window): () => void {
   };
   const onUnhandledRejection = (event: PromiseRejectionEvent): void => {
     try {
-      emit('runtime.unhandled-rejection', normalizeJsonValue({ reason: event.reason }));
+      const errorInfo = getErrorInfo(event.reason);
+      const message = errorInfo?.message
+        ?? (typeof event.reason === 'string' && event.reason.trim() !== ''
+          ? event.reason.trim()
+          : 'Unhandled promise rejection');
+      emit('runtime.unhandled-rejection', normalizeJsonValue({
+        message,
+        ...(errorInfo?.stack === undefined ? {} : { stack: errorInfo.stack }),
+        reason: event.reason,
+      }));
     } catch {
       // A hostile synthetic event must not affect the inspected application.
     }
@@ -99,6 +110,169 @@ export function startConsoleCapture(target: Window = window): () => void {
   };
   captureWindow[CONSOLE_CAPTURE_STATE] = { stop };
   return stop;
+}
+
+interface ErrorInfo {
+  message?: string;
+  stack?: string;
+}
+
+function createConsoleErrorPayload(args: unknown[], target: Window): JsonValue {
+  const errorInfo = args
+    .map((value) => getNestedErrorInfo(value, target))
+    .find((value) => value !== undefined);
+  const eventMessage = args
+    .map((value) => getBrowserEventMessage(value, target))
+    .find((value) => value !== undefined);
+  const eventType = args
+    .map((value) => getBrowserEventType(value, target))
+    .find((value) => value !== undefined);
+  const strings = args
+    .filter((value): value is string => typeof value === 'string')
+    .map((value) => value.trim())
+    .filter((value) => value !== '');
+  const nonPrefixString = strings.find((value) => !/^\[[^\]]+\]$/.test(value));
+  const message = errorInfo?.message
+    ?? eventMessage
+    ?? eventType
+    ?? nonPrefixString
+    ?? strings[0]
+    ?? 'Console error';
+
+  return normalizeJsonValue({
+    message,
+    ...(errorInfo?.stack === undefined ? {} : { stack: errorInfo.stack }),
+    arguments: args.map((value) => serializeConsoleArgument(value, target)),
+  });
+}
+
+function serializeConsoleArgument(value: unknown, target: Window): unknown {
+  const tag = getObjectTag(value);
+  if (tag === 'ErrorEvent' || isWindowInstance(value, target, 'ErrorEvent')) {
+    return compactKnownProperties({
+      type: readKnownProperty(value, 'type'),
+      message: readKnownProperty(value, 'message'),
+      filename: readKnownProperty(value, 'filename'),
+      lineNumber: readKnownProperty(value, 'lineno'),
+      columnNumber: readKnownProperty(value, 'colno'),
+      error: readKnownProperty(value, 'error'),
+      timeStamp: readKnownProperty(value, 'timeStamp'),
+      isTrusted: readKnownProperty(value, 'isTrusted'),
+    });
+  }
+  if (tag === 'PromiseRejectionEvent' || isWindowInstance(value, target, 'PromiseRejectionEvent')) {
+    return compactKnownProperties({
+      type: readKnownProperty(value, 'type'),
+      reason: readKnownProperty(value, 'reason'),
+      timeStamp: readKnownProperty(value, 'timeStamp'),
+      isTrusted: readKnownProperty(value, 'isTrusted'),
+    });
+  }
+  if (tag === 'Event' || tag?.endsWith('Event') || isWindowInstance(value, target, 'Event')) {
+    return compactKnownProperties({
+      type: readKnownProperty(value, 'type'),
+      timeStamp: readKnownProperty(value, 'timeStamp'),
+      isTrusted: readKnownProperty(value, 'isTrusted'),
+    });
+  }
+  return value;
+}
+
+function getNestedErrorInfo(value: unknown, target: Window): ErrorInfo | undefined {
+  const direct = getErrorInfo(value);
+  if (direct !== undefined || typeof value !== 'object' || value === null) {
+    return direct;
+  }
+
+  const tag = getObjectTag(value);
+  const browserEvent = tag === 'ErrorEvent'
+    || tag === 'PromiseRejectionEvent'
+    || isWindowInstance(value, target, 'ErrorEvent')
+    || isWindowInstance(value, target, 'PromiseRejectionEvent');
+  for (const key of ['error', 'reason']) {
+    const nestedValue = browserEvent
+      ? readKnownProperty(value, key)
+      : readOwnDataProperty(value, key);
+    const nested = getErrorInfo(nestedValue);
+    if (nested !== undefined) return nested;
+  }
+  return undefined;
+}
+
+function getErrorInfo(value: unknown): ErrorInfo | undefined {
+  const tag = getObjectTag(value);
+  if (tag !== 'Error' && tag !== 'DOMException') return undefined;
+
+  const message = readKnownProperty(value, 'message');
+  const stack = readKnownProperty(value, 'stack');
+  return {
+    ...(typeof message === 'string' && message.trim() !== '' ? { message: message.trim() } : {}),
+    ...(typeof stack === 'string' && stack.trim() !== '' ? { stack } : {}),
+  };
+}
+
+function getBrowserEventMessage(value: unknown, target: Window): string | undefined {
+  if (getObjectTag(value) !== 'ErrorEvent' && !isWindowInstance(value, target, 'ErrorEvent')) {
+    return undefined;
+  }
+  const message = readKnownProperty(value, 'message');
+  return typeof message === 'string' && message.trim() !== '' ? message.trim() : undefined;
+}
+
+function getBrowserEventType(value: unknown, target: Window): string | undefined {
+  const tag = getObjectTag(value);
+  if (tag !== 'Event' && !tag?.endsWith('Event') && !isWindowInstance(value, target, 'Event')) {
+    return undefined;
+  }
+  const type = readKnownProperty(value, 'type');
+  return typeof type === 'string' && type.trim() !== '' ? type.trim() : undefined;
+}
+
+function getObjectTag(value: unknown): string | undefined {
+  if (typeof value !== 'object' || value === null) return undefined;
+  try {
+    return Object.prototype.toString.call(value).slice(8, -1);
+  } catch {
+    return undefined;
+  }
+}
+
+function readKnownProperty(value: unknown, key: PropertyKey): unknown {
+  if (typeof value !== 'object' || value === null) return undefined;
+  try {
+    return Reflect.get(value, key);
+  } catch {
+    return undefined;
+  }
+}
+
+function readOwnDataProperty(value: object, key: PropertyKey): unknown {
+  try {
+    const descriptor = Object.getOwnPropertyDescriptor(value, key);
+    return descriptor && Object.prototype.hasOwnProperty.call(descriptor, 'value')
+      ? descriptor.value
+      : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function isWindowInstance(value: unknown, target: Window, constructorName: string): boolean {
+  if (typeof value !== 'object' || value === null) return false;
+  try {
+    const constructor = Reflect.get(target, constructorName);
+    return typeof constructor === 'function' && value instanceof constructor;
+  } catch {
+    return false;
+  }
+}
+
+function compactKnownProperties(
+  properties: Record<string, unknown>,
+): Record<string, unknown> {
+  return Object.fromEntries(
+    Object.entries(properties).filter(([, value]) => value !== undefined),
+  );
 }
 
 function createUniqueId(target: Window): string {

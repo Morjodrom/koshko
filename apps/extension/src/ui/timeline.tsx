@@ -59,7 +59,8 @@ const EventNode = memo(function EventNode({ data }: NodeProps<TimelineNode>): Re
         type="button"
         data-entry-type={event.entryType}
         data-entry-name={event.name}
-        data-signal-name={event.entryType === 'signal' ? event.name : undefined}
+        data-error-name={event.entryType === 'error' ? event.machineName : undefined}
+        data-signal-name={event.entryType === 'signal' ? event.machineName : undefined}
         data-direction={event.direction}
         aria-expanded={event.expanded}
         aria-controls={`timeline-details-${event.entryId}`}

@@ -35,6 +35,7 @@ describe('browser console capture', () => {
       name: 'console.error',
       producerSequence: 1,
       payload: {
+        message: 'failed',
         arguments: ['failed', { token: '[Redacted]', self: '[Circular]' }],
       },
     });
@@ -59,7 +60,8 @@ describe('browser console capture', () => {
     expect(postedErrors(postMessage)[0].error).toMatchObject({
       name: 'runtime.uncaught-error',
       payload: {
-        message: 'Uncaught Error: outer',
+        message: 'outer',
+        stack: expect.any(String),
         filename: 'https://example.test/app.js',
         lineNumber: 12,
         columnNumber: 34,
@@ -77,6 +79,37 @@ describe('browser console capture', () => {
     });
   });
 
+  it('promotes a direct Error message and stack while preserving normalized error details', () => {
+    const postMessage = vi.spyOn(window, 'postMessage').mockImplementation(() => {});
+    window.console.error = vi.fn();
+    cleanups.push(startConsoleCapture());
+    const error = new Error('Checkout exploded', { cause: new Error('Gateway failed') }) as Error & {
+      endpointUrl: string;
+      token: string;
+    };
+    error.endpointUrl = 'https://example.test/pay?token=secret#debug';
+    error.token = 'secret';
+
+    window.console.error(error);
+
+    expect(postedErrors(postMessage)[0].error.payload).toMatchObject({
+      message: 'Checkout exploded',
+      stack: expect.any(String),
+      arguments: [{
+        name: 'Error',
+        message: 'Checkout exploded',
+        stack: expect.any(String),
+        cause: {
+          name: 'Error',
+          message: 'Gateway failed',
+          stack: expect.any(String),
+        },
+        endpointUrl: 'https://example.test/pay',
+        token: '[Redacted]',
+      }],
+    });
+  });
+
   it('captures primitive and Error promise rejection reasons in order', () => {
     const postMessage = vi.spyOn(window, 'postMessage').mockImplementation(() => {});
     window.console.error = vi.fn();
@@ -90,13 +123,97 @@ describe('browser console capture', () => {
     expect(errors[0]).toMatchObject({
       name: 'runtime.unhandled-rejection',
       producerSequence: 1,
-      payload: { reason: 'plain failure' },
+      payload: { message: 'plain failure', reason: 'plain failure' },
     });
     expect(errors[1]).toMatchObject({
       name: 'runtime.unhandled-rejection',
       producerSequence: 2,
-      payload: { reason: { name: 'Error', message: 'rejected' } },
+      payload: {
+        message: 'rejected',
+        stack: expect.any(String),
+        reason: { name: 'Error', message: 'rejected', stack: expect.any(String) },
+      },
     });
+  });
+
+  it('expands webpack-style ErrorEvent arguments and promotes the real error message and stack', () => {
+    const postMessage = vi.spyOn(window, 'postMessage').mockImplementation(() => {});
+    window.console.error = vi.fn();
+    cleanups.push(startConsoleCapture());
+    const error = new Error('Compilation failed');
+    const event = new ErrorEvent('error', {
+      message: 'Uncaught Error: Compilation failed',
+      filename: 'https://example.test/app.js?token=secret#source',
+      lineno: 21,
+      colno: 8,
+      error,
+    });
+
+    window.console.error('[webpack-dev-server]', event);
+
+    expect(postedErrors(postMessage)[0].error.payload).toMatchObject({
+      message: 'Compilation failed',
+      stack: expect.any(String),
+      arguments: [
+        '[webpack-dev-server]',
+        {
+          type: 'error',
+          message: 'Uncaught Error: Compilation failed',
+          filename: 'https://example.test/app.js',
+          lineNumber: 21,
+          columnNumber: 8,
+          error: {
+            name: 'Error',
+            message: 'Compilation failed',
+            stack: expect.any(String),
+          },
+          timeStamp: expect.any(Number),
+        },
+      ],
+    });
+  });
+
+  it('expands generic browser events without inventing a stack', () => {
+    const postMessage = vi.spyOn(window, 'postMessage').mockImplementation(() => {});
+    window.console.error = vi.fn();
+    cleanups.push(startConsoleCapture());
+
+    window.console.error('[webpack-dev-server]', new Event('disconnect'));
+
+    const payload = postedErrors(postMessage)[0].error.payload;
+    expect(payload).toMatchObject({
+      message: 'disconnect',
+      arguments: [
+        '[webpack-dev-server]',
+        {
+          type: 'disconnect',
+          timeStamp: expect.any(Number),
+        },
+      ],
+    });
+    expect(payload).not.toHaveProperty('stack');
+  });
+
+  it('does not invoke arbitrary argument getters', () => {
+    const nativeError = vi.fn();
+    const postMessage = vi.spyOn(window, 'postMessage').mockImplementation(() => {});
+    window.console.error = nativeError;
+    cleanups.push(startConsoleCapture());
+    const value: Record<string, unknown> = { visible: true };
+    Object.defineProperty(value, 'dangerous', {
+      enumerable: true,
+      get() {
+        throw new Error('must not run');
+      },
+    });
+
+    expect(() => window.console.error(value)).not.toThrow();
+
+    expect(nativeError).toHaveBeenCalledOnce();
+    const argument = (postedErrors(postMessage)[0].error.payload as {
+      arguments: Array<Record<string, unknown>>;
+    }).arguments[0];
+    expect(argument).toEqual({ visible: true });
   });
 
   it('bounds oversized console values and keeps frame producers independent', () => {
@@ -118,10 +235,36 @@ describe('browser console capture', () => {
 
     const topError = postedErrors(topPostMessage)[0].error;
     const frameError = postedErrors(framePostMessage)[0].error;
-    expect(topError.payload).toEqual({ arguments: ['[Truncated]'] });
+    expect(topError.payload).toEqual({
+      message: '[Truncated]',
+      arguments: ['[Truncated]'],
+    });
     expect(topError.producerSequence).toBe(1);
     expect(frameError.producerSequence).toBe(1);
     expect(frameError.producerId).not.toBe(topError.producerId);
+  });
+
+  it('preserves real errors created in another frame', () => {
+    const postMessage = vi.spyOn(window, 'postMessage').mockImplementation(() => {});
+    window.console.error = vi.fn();
+    cleanups.push(startConsoleCapture());
+    const frame = document.createElement('iframe');
+    document.body.append(frame);
+    cleanups.push(() => frame.remove());
+    const frameWindow = frame.contentWindow as Window & { Error: ErrorConstructor };
+    const crossRealmError = new frameWindow.Error('Frame exploded');
+
+    window.console.error(crossRealmError);
+
+    expect(postedErrors(postMessage)[0].error.payload).toMatchObject({
+      message: 'Frame exploded',
+      stack: expect.any(String),
+      arguments: [{
+        name: 'Error',
+        message: 'Frame exploded',
+        stack: expect.any(String),
+      }],
+    });
   });
 
   it('is idempotent and restores only its own console wrapper', () => {

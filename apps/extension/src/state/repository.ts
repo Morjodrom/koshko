@@ -7,6 +7,7 @@ import {
   type CapturedStateMutationV1,
   type JsonObject,
   type JsonValue,
+  type KoshkoErrorV1,
 } from '@koshko/protocol';
 
 export interface KoshkoTimelineActor {
@@ -340,6 +341,19 @@ export function isCapturedSignal(
 
 export function isCapturedError(captured: KoshkoLogEntry): captured is CapturedErrorV1 {
   return 'error' in captured;
+}
+
+export function getErrorDisplayMessage(error: KoshkoErrorV1): string {
+  if (
+    typeof error.payload === 'object'
+    && error.payload !== null
+    && !Array.isArray(error.payload)
+    && typeof error.payload.message === 'string'
+    && error.payload.message.trim() !== ''
+  ) {
+    return error.payload.message;
+  }
+  return error.name;
 }
 
 function getCapturedEntryType(entry: KoshkoLogEntry): 'error' | 'signal' | 'state' {
