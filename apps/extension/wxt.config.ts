@@ -7,9 +7,13 @@ export default defineConfig({
   manifest: {
     name: 'Koshko Inspector',
     version: extensionPackage.version,
-    description: 'Disposable Chrome DevTools prototype for koshko signals.',
+    description: 'Local Chrome DevTools inspector for koshko signals and page JavaScript errors.',
     permissions: ['activeTab', 'scripting', 'storage'],
     optional_host_permissions: ['http://*/*', 'https://*/*'],
+    web_accessible_resources: [{
+      resources: ['console-capture.js'],
+      matches: ['http://*/*', 'https://*/*'],
+    }],
     action: {
       default_title: 'Grant Koshko access to this site',
       default_icon: {

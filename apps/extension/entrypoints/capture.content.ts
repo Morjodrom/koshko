@@ -1,4 +1,5 @@
 import { defineContentScript } from 'wxt/sandbox';
+import { injectScript } from 'wxt/client';
 import { startCapture } from '../src/capture';
 
 export default defineContentScript({
@@ -10,5 +11,6 @@ export default defineContentScript({
   registration: 'runtime',
   main() {
     startCapture();
+    void injectScript('/console-capture.js').catch(() => {});
   },
 });

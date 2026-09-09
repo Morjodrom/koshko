@@ -106,6 +106,35 @@ describe('protocol normalization', () => {
     });
   });
 
+  it('normalizes nested errors without invoking getters', () => {
+    const cause = new Error('inner');
+    Object.defineProperty(cause, 'token', { value: 'secret', enumerable: true });
+    const error = new Error('outer', { cause });
+    Object.defineProperty(error, 'dangerous', {
+      enumerable: true,
+      get() {
+        throw new Error('must not run');
+      },
+    });
+
+    const normalized = normalizeJsonValue({ error });
+
+    expect(normalized).toMatchObject({
+      error: {
+        name: 'Error',
+        message: 'outer',
+        stack: expect.any(String),
+        cause: {
+          name: 'Error',
+          message: 'inner',
+          stack: expect.any(String),
+          token: '[Redacted]',
+        },
+      },
+    });
+    expect((normalized as Record<string, Record<string, unknown>>).error).not.toHaveProperty('dangerous');
+  });
+
   it('normalizes state mutation labels as bounded identifiers', () => {
     const mutation = normalizeKoshkoStateMutationV1({
       id: 'mutation-1',

@@ -43,6 +43,8 @@ on that example, Vue, React, Svelte, Nano Stores, or a particular application pr
 
 - Chromium Manifest V3 extension built with WXT.
 - Content collection from the inspected top-level page and permitted child frames.
+- Local capture of `console.error`, uncaught JavaScript errors, and unhandled promise rejections
+  from those permitted page frames.
 - A dedicated Chrome DevTools panel.
 - Actor sequence timeline view.
 - Chronological plain log view.
@@ -433,6 +435,8 @@ Requirements:
 - The extension must request no network, cookies, history, or native-messaging permission.
 - No analytics or crash reporting in the default open-source build.
 - Captured data stays inside the local browser extension process.
+- Page error capture may include console arguments, error messages, stack traces, and rejected
+  values. The same validation, redaction, size limits, and in-memory retention rules apply.
 - The README and store listing must state exactly what is captured and retained.
 
 ## 16. First integration example: host application and embedded widget
@@ -462,12 +466,15 @@ example should log the resulting semantic widget event rather than claiming to o
 
 ## 17. Optional adapters and future representations
 
+Implemented adapters:
+
+- Console adapter for `console.error`, uncaught JavaScript errors, and unhandled promise rejections.
+
 Potential adapters:
 
 - Redux DevTools action adapter for quick experimentation.
 - Vue DevTools timeline adapter for Vue applications.
 - OpenTelemetry span/span-event exporter.
-- Console adapter.
 - Importers for compatible JSON trace formats.
 
 Potential views:

@@ -763,6 +763,7 @@ function Log({
           <legend>Entry type</legend>
           <label><input type="checkbox" checked={selectedTypes.has('signal')} onChange={() => onTypeToggle('signal')} /> Signal</label>
           <label><input type="checkbox" checked={selectedTypes.has('state')} onChange={() => onTypeToggle('state')} /> State</label>
+          <span className="muted">Console errors are captured as error signals.</span>
         </fieldset>
         <fieldset className="log-filter-group">
           <legend>Actors</legend>

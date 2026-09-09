@@ -34,6 +34,7 @@ const URL_KEYS = [
   'url',
   'uri',
   'href',
+  'filename',
   'endpoint',
   'callbackurl',
   'redirecturl',
@@ -419,6 +420,11 @@ function normalizeJsonValueInternal(
   }
 
   const tag = Object.prototype.toString.call(input).slice(8, -1);
+  if (tag === 'Error' || tag === 'DOMException') {
+    const result = normalizeErrorValue(input, tag, depth, seen, path);
+    seen.delete(input);
+    return result;
+  }
   if (tag !== 'Object') {
     const raw = normalizeText(`[${tag}]`, MAX_TEXT_CODE_POINTS);
     seen.delete(input);
@@ -451,6 +457,39 @@ function normalizeJsonValueInternal(
   }
 
   seen.delete(input);
+  return result;
+}
+
+function normalizeErrorValue(
+  input: object,
+  tag: string,
+  depth: number,
+  seen: WeakMap<object, string>,
+  path: string[],
+): JsonValue {
+  const result: Record<string, JsonValue> = { name: tag };
+  const descriptors = Object.getOwnPropertyDescriptors(input);
+  const keys = Object.keys(descriptors);
+  const limit = Math.min(keys.length, MAX_OBJECT_KEYS);
+
+  for (let index = 0; index < limit; index += 1) {
+    const key = keys[index];
+    const descriptor = descriptors[key];
+    if (!descriptor || !Object.prototype.hasOwnProperty.call(descriptor, 'value')) {
+      continue;
+    }
+
+    const value = descriptor.value;
+    result[key] = isSensitiveKey(key)
+      ? REDACTED
+      : isUrlKey(key)
+        ? sanitizeUrlValue(value)
+        : normalizeJsonValueInternal(value, depth + 1, seen, path.concat(key));
+  }
+
+  if (keys.length > MAX_OBJECT_KEYS) {
+    result[TRUNCATED] = TRUNCATED;
+  }
   return result;
 }
 

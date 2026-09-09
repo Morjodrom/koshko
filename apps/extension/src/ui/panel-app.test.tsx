@@ -503,6 +503,44 @@ describe('PanelApp', () => {
     expect(log).toContain('https://demo.example.test');
   });
 
+  it('shows browser console errors in every signal representation without changing state', () => {
+    const { port, repository } = mountPanel();
+    const consoleError = captured({
+      signal: {
+        ...captured().signal,
+        id: 'console-error-1',
+        producerId: 'browser-console:frame-1',
+        source: { id: 'browser-console', label: 'Browser Console' },
+        name: 'console.error',
+        severity: 'error',
+        details: { arguments: ['Checkout failed', { code: 'PAYMENT_ERROR' }] },
+        tags: ['browser-console'],
+      },
+    });
+
+    act(() => port.emitCapture(consoleError));
+
+    expect(screen.getByTestId('timeline').textContent).toContain('Browser Console');
+    expect(screen.getByTestId('timeline').textContent).toContain('console.error');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Log' }));
+    expect(screen.getByRole('checkbox', { name: 'Browser Console' })).toBeTruthy();
+    expect(screen.getByTestId('log').textContent).toContain('PAYMENT_ERROR');
+    expect(screen.getByText('Console errors are captured as error signals.')).toBeTruthy();
+
+    fireEvent.change(screen.getByRole('searchbox', { name: 'Search log' }), {
+      target: { value: 'checkout failed' },
+    });
+    expect(screen.getByTestId('log').textContent).toContain('console.error');
+
+    fireEvent.click(screen.getByRole('button', { name: 'AI Log' }));
+    const aiLog = screen.getByRole('textbox', { name: 'AI-ready Koshko log' }) as HTMLTextAreaElement;
+    expect(aiLog.value).toContain('console.error');
+    expect(aiLog.value).toContain('PAYMENT_ERROR');
+    expect(repository.getDisplayState()).toEqual({});
+    expect(repository.exportJsonl()).toContain('console-error-1');
+  });
+
   it('buffers signals when paused, resumes, clears, and delegates export', () => {
     const { port, repository, downloadJsonl } = mountPanel();
 
