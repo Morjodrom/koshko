@@ -5,6 +5,7 @@ import {
   type JsonObject,
   type KoshkoStatePatchOperationV1,
 } from './index';
+import { MAX_ARRAY_LENGTH, MAX_OBJECT_PROPERTIES } from './limits';
 
 describe('state mutation protocol', () => {
   it('normalizes and redacts state patch values', () => {
@@ -104,5 +105,62 @@ describe('state mutation protocol', () => {
     expect(applyStateMutationPatch(previous, [
       { op: 'replace', path: '/profile/~2invalid', value: true },
     ])).toBe(previous);
+  });
+
+  it('decodes patch getters and proxies without invoking property gets', () => {
+    const previous: JsonObject = { ready: false };
+    let getterInvoked = false;
+    const operation = new Proxy({
+      op: 'replace',
+      path: '/ready',
+      value: true,
+    } satisfies KoshkoStatePatchOperationV1, {
+      get() {
+        getterInvoked = true;
+        throw new Error('must not run');
+      },
+    });
+    const accessorOperation: Record<string, unknown> = {
+      op: 'replace',
+      path: '/ready',
+    };
+    Object.defineProperty(accessorOperation, 'value', {
+      enumerable: true,
+      get() {
+        getterInvoked = true;
+        return true;
+      },
+    });
+    const inaccessible = new Proxy([operation], {
+      getOwnPropertyDescriptor() {
+        throw new Error('descriptor unavailable');
+      },
+    });
+    const revocable = Proxy.revocable([operation], {});
+    revocable.revoke();
+
+    expect(applyStateMutationPatch(previous, [operation])).toEqual({ ready: true });
+    expect(applyStateMutationPatch(previous, [accessorOperation] as unknown as KoshkoStatePatchOperationV1[])).toBe(previous);
+    expect(() => applyStateMutationPatch(previous, inaccessible)).not.toThrow();
+    expect(applyStateMutationPatch(previous, inaccessible)).toBe(previous);
+    expect(() => applyStateMutationPatch(previous, revocable.proxy)).not.toThrow();
+    expect(applyStateMutationPatch(previous, revocable.proxy)).toBe(previous);
+    expect(getterInvoked).toBe(false);
+  });
+
+  it('rejects patches that would exceed state data limits', () => {
+    const fullArray: JsonObject = {
+      items: Array.from({ length: MAX_ARRAY_LENGTH }, () => true),
+    };
+    const fullObject: JsonObject = Object.fromEntries(
+      Array.from({ length: MAX_OBJECT_PROPERTIES }, (_, index) => [`key-${index}`, true]),
+    );
+
+    expect(applyStateMutationPatch(fullArray, [
+      { op: 'add', path: '/items/-', value: true },
+    ])).toBe(fullArray);
+    expect(applyStateMutationPatch(fullObject, [
+      { op: 'add', path: '/overflow', value: true },
+    ])).toBe(fullObject);
   });
 });

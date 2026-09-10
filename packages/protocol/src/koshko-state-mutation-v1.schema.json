@@ -92,17 +92,19 @@
     },
     "jsonValue": {
       "anyOf": [
-        { "type": "string" },
+        { "type": "string", "maxLength": 16384 },
         { "type": "number" },
         { "type": "integer" },
         { "type": "boolean" },
         { "type": "null" },
         {
           "type": "array",
+          "maxItems": 500,
           "items": { "$ref": "#/$defs/jsonValue" }
         },
         {
           "type": "object",
+          "maxProperties": 200,
           "additionalProperties": { "$ref": "#/$defs/jsonValue" }
         }
       ]

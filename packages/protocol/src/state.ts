@@ -1,6 +1,19 @@
 import type { JsonArray, JsonObject, JsonValue, KoshkoStatePatchOperationV1 } from './types';
-
-const MAX_JSON_POINTER_LENGTH = 16_384;
+import {
+  MAX_JSON_POINTER_CODE_POINTS,
+  MAX_STATE_PATCH_OPERATIONS,
+} from './limits';
+import {
+  hasOwnDataProperty,
+  hasAtMostCodePoints,
+  isArray,
+  isJsonValue,
+  isObjectLike,
+  readArrayLength,
+  readOwnDataProperty,
+  readOwnPropertyDescriptors,
+  readPrototype,
+} from './safe-data';
 
 type PatchResult =
   | { ok: true; value: JsonValue }
@@ -15,23 +28,26 @@ export function applyStateMutationPatch(
   state: JsonObject,
   patch: readonly KoshkoStatePatchOperationV1[],
 ): JsonObject {
-  if (!Array.isArray(patch)) {
+  const decodedPatch = decodeStatePatch(patch);
+  if (decodedPatch === undefined) {
     return state;
   }
 
   let current: JsonValue = state;
 
-  for (const operation of patch) {
-    if (!isPatchOperation(operation)) {
-      return state;
-    }
+  for (const operation of decodedPatch) {
     const segments = parseJsonPointer(operation.path);
     if (segments === undefined || segments.length === 0) {
       return state;
     }
 
     const result = applyOperation(current, segments, operation);
-    if (!result.ok || !isJsonObject(result.value) || Array.isArray(result.value)) {
+    if (
+      !result.ok ||
+      !isJsonValue(result.value) ||
+      !isJsonObject(result.value) ||
+      isArray(result.value)
+    ) {
       return state;
     }
     current = result.value;
@@ -44,9 +60,54 @@ export function isStateMutationPath(value: unknown): value is string {
   return (
     typeof value === 'string' &&
     value.length > 0 &&
-    value.length <= MAX_JSON_POINTER_LENGTH &&
+    hasAtMostCodePoints(value, MAX_JSON_POINTER_CODE_POINTS) &&
     parseJsonPointer(value) !== undefined
   );
+}
+
+function decodeStatePatch(value: unknown): KoshkoStatePatchOperationV1[] | undefined {
+  const length = readArrayLength(value);
+  if (length === undefined || length > MAX_STATE_PATCH_OPERATIONS) {
+    return undefined;
+  }
+
+  const patch: KoshkoStatePatchOperationV1[] = [];
+  for (let index = 0; index < length; index += 1) {
+    if (!hasOwnDataProperty(value, index)) {
+      return undefined;
+    }
+    const operation = decodePatchOperation(readOwnDataProperty(value, index));
+    if (operation === undefined) {
+      return undefined;
+    }
+    patch.push(operation);
+  }
+  return patch;
+}
+
+function decodePatchOperation(value: unknown): KoshkoStatePatchOperationV1 | undefined {
+  if (!isObjectLike(value)) {
+    return undefined;
+  }
+
+  const op = readOwnDataProperty(value, 'op');
+  const path = readOwnDataProperty(value, 'path');
+  if (!isStateMutationPath(path)) {
+    return undefined;
+  }
+  if (op === 'remove') {
+    return { op, path };
+  }
+  if ((op !== 'add' && op !== 'replace') || !hasOwnDataProperty(value, 'value')) {
+    return undefined;
+  }
+
+  const operationValue = readOwnDataProperty(value, 'value');
+  if (!isJsonValue(operationValue)) {
+    return undefined;
+  }
+  const cloned = cloneJsonValue(operationValue);
+  return cloned.ok ? { op, path, value: cloned.value } : undefined;
 }
 
 function applyOperation(
@@ -85,16 +146,19 @@ function applyToChild(
   segment: string,
   operation: KoshkoStatePatchOperationV1,
 ): PatchResult {
-  if (Array.isArray(container)) {
+  if (isArray(container)) {
     return applyToArray(container, segment, operation);
   }
 
-  const exists = Object.prototype.hasOwnProperty.call(container, segment);
+  const exists = hasOwnDataProperty(container, segment);
   if (operation.op === 'remove') {
     if (!exists) {
       return { ok: false };
     }
-    const next = { ...container };
+    const next = cloneJsonObjectShallow(container);
+    if (next === undefined) {
+      return { ok: false };
+    }
     delete next[segment];
     return { ok: true, value: next };
   }
@@ -103,8 +167,11 @@ function applyToChild(
     return { ok: false };
   }
 
-  const next = { ...container };
-  defineJsonProperty(next, segment, cloneJsonValue(operation.value));
+  const next = cloneJsonObjectShallow(container);
+  if (next === undefined) {
+    return { ok: false };
+  }
+  defineJsonProperty(next, segment, operation.value);
   return { ok: true, value: next };
 }
 
@@ -113,10 +180,13 @@ function applyToArray(
   segment: string,
   operation: KoshkoStatePatchOperationV1,
 ): PatchResult {
-  const next = container.slice();
+  const next = cloneJsonArrayShallow(container);
+  if (next === undefined) {
+    return { ok: false };
+  }
 
   if (operation.op === 'add' && segment === '-') {
-    next.push(cloneJsonValue(operation.value));
+    next.push(operation.value);
     return { ok: true, value: next };
   }
 
@@ -129,7 +199,7 @@ function applyToArray(
     if (index > next.length) {
       return { ok: false };
     }
-    next.splice(index, 0, cloneJsonValue(operation.value));
+    next.splice(index, 0, operation.value);
     return { ok: true, value: next };
   }
 
@@ -140,24 +210,27 @@ function applyToArray(
   if (operation.op === 'remove') {
     next.splice(index, 1);
   } else {
-    next[index] = cloneJsonValue(operation.value);
+    next[index] = operation.value;
   }
   return { ok: true, value: next };
 }
 
 function getExistingChild(container: JsonObject | JsonArray, segment: string): PatchResult {
-  if (Array.isArray(container)) {
+  if (isArray(container)) {
     const index = parseArrayIndex(segment);
-    if (index === undefined || index >= container.length) {
+    const length = readArrayLength(container);
+    if (index === undefined || length === undefined || index >= length || !hasOwnDataProperty(container, index)) {
       return { ok: false };
     }
-    return { ok: true, value: container[index] };
+    const value = readOwnDataProperty(container, index);
+    return isJsonValue(value) ? { ok: true, value } : { ok: false };
   }
 
-  if (!Object.prototype.hasOwnProperty.call(container, segment)) {
+  if (!hasOwnDataProperty(container, segment)) {
     return { ok: false };
   }
-  return { ok: true, value: container[segment] };
+  const value = readOwnDataProperty(container, segment);
+  return isJsonValue(value) ? { ok: true, value } : { ok: false };
 }
 
 function replaceExistingChild(
@@ -165,20 +238,23 @@ function replaceExistingChild(
   segment: string,
   value: JsonValue,
 ): PatchResult {
-  if (Array.isArray(container)) {
+  if (isArray(container)) {
     const index = parseArrayIndex(segment);
-    if (index === undefined || index >= container.length) {
+    const next = cloneJsonArrayShallow(container);
+    if (index === undefined || next === undefined || index >= next.length) {
       return { ok: false };
     }
-    const next = container.slice();
     next[index] = value;
     return { ok: true, value: next };
   }
 
-  if (!Object.prototype.hasOwnProperty.call(container, segment)) {
+  if (!hasOwnDataProperty(container, segment)) {
     return { ok: false };
   }
-  const next = { ...container };
+  const next = cloneJsonObjectShallow(container);
+  if (next === undefined) {
+    return { ok: false };
+  }
   defineJsonProperty(next, segment, value);
   return { ok: true, value: next };
 }
@@ -221,18 +297,105 @@ function parseArrayIndex(segment: string): number | undefined {
   return Number.isSafeInteger(index) ? index : undefined;
 }
 
-function cloneJsonValue(value: JsonValue): JsonValue {
-  if (Array.isArray(value)) {
-    return value.map(cloneJsonValue);
+function cloneJsonValue(value: unknown, seen = new WeakSet<object>()): PatchResult {
+  if (value === null || typeof value === 'string' || typeof value === 'boolean') {
+    return { ok: true, value };
   }
-  if (isJsonObject(value)) {
-    const clone: JsonObject = {};
-    for (const [key, child] of Object.entries(value)) {
-      defineJsonProperty(clone, key, cloneJsonValue(child));
+  if (typeof value === 'number') {
+    return Number.isFinite(value) ? { ok: true, value } : { ok: false };
+  }
+  if (!isObjectLike(value) || seen.has(value)) {
+    return { ok: false };
+  }
+
+  seen.add(value);
+  try {
+    if (isArray(value)) {
+      const length = readArrayLength(value);
+      if (length === undefined) {
+        return { ok: false };
+      }
+      const clone: JsonArray = [];
+      for (let index = 0; index < length; index += 1) {
+        if (!hasOwnDataProperty(value, index)) {
+          return { ok: false };
+        }
+        const child = cloneJsonValue(readOwnDataProperty(value, index), seen);
+        if (!child.ok) {
+          return child;
+        }
+        clone.push(child.value);
+      }
+      return { ok: true, value: clone };
     }
-    return clone;
+
+    const prototype = readPrototype(value);
+    const descriptors = readOwnPropertyDescriptors(value);
+    if ((prototype !== Object.prototype && prototype !== null) || descriptors === undefined) {
+      return { ok: false };
+    }
+    const clone: JsonObject = {};
+    for (const key of Object.keys(descriptors)) {
+      const descriptor = descriptors[key];
+      if (!descriptor?.enumerable) {
+        continue;
+      }
+      if (!Object.prototype.hasOwnProperty.call(descriptor, 'value')) {
+        return { ok: false };
+      }
+      const child = cloneJsonValue(descriptor.value, seen);
+      if (!child.ok) {
+        return child;
+      }
+      defineJsonProperty(clone, key, child.value);
+    }
+    return { ok: true, value: clone };
+  } catch {
+    return { ok: false };
+  } finally {
+    seen.delete(value);
   }
-  return value;
+}
+
+function cloneJsonArrayShallow(value: JsonArray): JsonArray | undefined {
+  const length = readArrayLength(value);
+  if (length === undefined) {
+    return undefined;
+  }
+
+  const clone: JsonArray = [];
+  for (let index = 0; index < length; index += 1) {
+    if (!hasOwnDataProperty(value, index)) {
+      return undefined;
+    }
+    const child = readOwnDataProperty(value, index);
+    if (!isJsonValue(child)) {
+      return undefined;
+    }
+    clone.push(child);
+  }
+  return clone;
+}
+
+function cloneJsonObjectShallow(value: JsonObject): JsonObject | undefined {
+  const prototype = readPrototype(value);
+  const descriptors = readOwnPropertyDescriptors(value);
+  if ((prototype !== Object.prototype && prototype !== null) || descriptors === undefined) {
+    return undefined;
+  }
+
+  const clone: JsonObject = {};
+  for (const key of Object.keys(descriptors)) {
+    const descriptor = descriptors[key];
+    if (!descriptor?.enumerable) {
+      continue;
+    }
+    if (!Object.prototype.hasOwnProperty.call(descriptor, 'value') || !isJsonValue(descriptor.value)) {
+      return undefined;
+    }
+    defineJsonProperty(clone, key, descriptor.value);
+  }
+  return clone;
 }
 
 function defineJsonProperty(target: JsonObject, key: string, value: JsonValue): void {
@@ -245,62 +408,5 @@ function defineJsonProperty(target: JsonObject, key: string, value: JsonValue): 
 }
 
 function isJsonObject(value: JsonValue): value is JsonObject | JsonArray {
-  return typeof value === 'object' && value !== null;
-}
-
-function isPatchOperation(value: unknown): value is KoshkoStatePatchOperationV1 {
-  if (!isRecord(value) || !isStateMutationPath(value.path)) {
-    return false;
-  }
-  if (value.op === 'remove') {
-    return true;
-  }
-  return (
-    (value.op === 'add' || value.op === 'replace') &&
-    Object.prototype.hasOwnProperty.call(value, 'value') &&
-    isJsonValue(value.value)
-  );
-}
-
-function isJsonValue(value: unknown, seen = new WeakSet<object>()): value is JsonValue {
-  if (value === null || typeof value === 'string' || typeof value === 'boolean') {
-    return true;
-  }
-  if (typeof value === 'number') {
-    return Number.isFinite(value);
-  }
-  if (!isRecord(value) || seen.has(value)) {
-    return false;
-  }
-
-  seen.add(value);
-  try {
-    if (Array.isArray(value)) {
-      for (let index = 0; index < value.length; index += 1) {
-        if (!Object.prototype.hasOwnProperty.call(value, index) || !isJsonValue(value[index], seen)) {
-          return false;
-        }
-      }
-      return true;
-    }
-
-    const prototype = Object.getPrototypeOf(value);
-    if (prototype !== Object.prototype && prototype !== null) {
-      return false;
-    }
-    return Object.values(Object.getOwnPropertyDescriptors(value)).every(
-      (descriptor) => !descriptor.enumerable || (
-        Object.prototype.hasOwnProperty.call(descriptor, 'value') &&
-        isJsonValue(descriptor.value, seen)
-      ),
-    );
-  } catch {
-    return false;
-  } finally {
-    seen.delete(value);
-  }
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
 }

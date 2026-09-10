@@ -13,15 +13,27 @@ import type {
   KoshkoErrorWindowMessageV1,
 } from './types';
 import { isStateMutationPath } from './state';
-
-const MAX_IDENTIFIER_CODE_POINTS = 128;
-const MAX_TEXT_CODE_POINTS = 16_384;
-const MAX_STRING_CODE_POINTS = 16_384;
-const MAX_OBJECT_DEPTH = 8;
-const MAX_OBJECT_KEYS = 200;
-const MAX_ARRAY_LENGTH = 500;
-const MAX_SERIALIZED_BYTES = 64 * 1024;
-const CONTROL_CHARS = /\p{C}/gu;
+import {
+  MAX_ARRAY_LENGTH,
+  MAX_IDENTIFIER_CODE_POINTS,
+  MAX_JSON_DEPTH,
+  MAX_OBJECT_PROPERTIES,
+  MAX_SERIALIZED_BYTES,
+  MAX_STATE_PATCH_OPERATIONS,
+  MAX_TEXT_CODE_POINTS,
+} from './limits';
+import {
+  hasOwnDataProperty,
+  hasAtMostCodePoints,
+  isArray,
+  isObjectLike,
+  readArrayLength,
+  readOwnDataProperty,
+  readOwnPropertyDescriptors,
+  readPrototype,
+  serializedJsonByteLength,
+  stripControlCharacters,
+} from './safe-data';
 
 const SENSITIVE_KEYS = new Set([
   'token',
@@ -81,48 +93,48 @@ export function normalizeKoshkoSignalV1(input: unknown): KoshkoSignalV1 {
   const signal: KoshkoSignalV1 = {
     protocol: 'koshko',
     version: 1,
-    id: normalizeIdentifier((record as Record<string, unknown>).id, INVALID_VALUE),
-    producerId: normalizeIdentifier((record as Record<string, unknown>).producerId, INVALID_VALUE),
+    id: normalizeIdentifier(readOwnDataProperty(record, 'id'), INVALID_VALUE),
+    producerId: normalizeIdentifier(readOwnDataProperty(record, 'producerId'), INVALID_VALUE),
     producerSequence: normalizePositiveInteger(
-      (record as Record<string, unknown>).producerSequence,
+      readOwnDataProperty(record, 'producerSequence'),
       1,
     ),
-    occurredAt: normalizeTimestamp((record as Record<string, unknown>).occurredAt),
-    source: normalizeActorReference((record as Record<string, unknown>).source),
-    name: normalizeIdentifier((record as Record<string, unknown>).name, INVALID_VALUE),
+    occurredAt: normalizeTimestamp(readOwnDataProperty(record, 'occurredAt')),
+    source: normalizeActorReference(readOwnDataProperty(record, 'source')),
+    name: normalizeIdentifier(readOwnDataProperty(record, 'name'), INVALID_VALUE),
   };
 
-  const target = (record as Record<string, unknown>).target;
+  const target = readOwnDataProperty(record, 'target');
   if (target !== undefined) {
     signal.target = normalizeActorReference(target);
   }
 
-  const severity = normalizeSeverity((record as Record<string, unknown>).severity);
+  const severity = normalizeSeverity(readOwnDataProperty(record, 'severity'));
   if (severity !== undefined) {
     signal.severity = severity;
   }
 
-  const details = (record as Record<string, unknown>).details;
+  const details = readOwnDataProperty(record, 'details');
   if (details !== undefined) {
     signal.details = normalizeJsonValue(details);
   }
 
-  const context = normalizeContext((record as Record<string, unknown>).context);
+  const context = normalizeContext(readOwnDataProperty(record, 'context'));
   if (context !== undefined) {
     signal.context = context;
   }
 
-  const correlationId = normalizeOptionalIdentifier((record as Record<string, unknown>).correlationId);
+  const correlationId = normalizeOptionalIdentifier(readOwnDataProperty(record, 'correlationId'));
   if (correlationId !== undefined) {
     signal.correlationId = correlationId;
   }
 
-  const causedBy = normalizeOptionalIdentifier((record as Record<string, unknown>).causedBy);
+  const causedBy = normalizeOptionalIdentifier(readOwnDataProperty(record, 'causedBy'));
   if (causedBy !== undefined) {
     signal.causedBy = causedBy;
   }
 
-  const tags = normalizeTags((record as Record<string, unknown>).tags);
+  const tags = normalizeTags(readOwnDataProperty(record, 'tags'));
   if (tags !== undefined) {
     signal.tags = tags;
   }
@@ -144,7 +156,7 @@ export function normalizeKoshkoErrorV1(input: unknown): KoshkoErrorV1 {
     payload: normalizeJsonValue(readOwnDataProperty(record, 'payload')),
   };
 
-  if (approximateJsonLength(error) > MAX_SERIALIZED_BYTES) {
+  if (serializedJsonByteLength(error) > MAX_SERIALIZED_BYTES) {
     error.payload = TRUNCATED;
   }
   return error;
@@ -172,13 +184,13 @@ export function normalizeKoshkoStateMutationV1(input: unknown): KoshkoStateMutat
 
 export function normalizeCapturedSignalV1(input: unknown): CapturedSignalV1 {
   const record = isObjectLike(input) ? input : {};
-  const signal = normalizeKoshkoSignalV1((record as Record<string, unknown>).signal);
-  const observedAt = normalizeTimestamp((record as Record<string, unknown>).observedAt);
-  const tabId = normalizeFrameNumber((record as Record<string, unknown>).tabId);
-  const frameId = normalizeFrameNumber((record as Record<string, unknown>).frameId);
-  const navigationId = normalizeIdentifier((record as Record<string, unknown>).navigationId, INVALID_VALUE);
-  const frameUrl = normalizeUrlLike((record as Record<string, unknown>).frameUrl);
-  const frameOrigin = normalizeFrameOrigin((record as Record<string, unknown>).frameOrigin, frameUrl);
+  const signal = normalizeKoshkoSignalV1(readOwnDataProperty(record, 'signal'));
+  const observedAt = normalizeTimestamp(readOwnDataProperty(record, 'observedAt'));
+  const tabId = normalizeFrameNumber(readOwnDataProperty(record, 'tabId'));
+  const frameId = normalizeFrameNumber(readOwnDataProperty(record, 'frameId'));
+  const navigationId = normalizeIdentifier(readOwnDataProperty(record, 'navigationId'), INVALID_VALUE);
+  const frameUrl = normalizeUrlLike(readOwnDataProperty(record, 'frameUrl'));
+  const frameOrigin = normalizeFrameOrigin(readOwnDataProperty(record, 'frameOrigin'), frameUrl);
 
   const captured: CapturedSignalV1 = {
     signal,
@@ -190,7 +202,7 @@ export function normalizeCapturedSignalV1(input: unknown): CapturedSignalV1 {
     frameOrigin,
   };
 
-  const documentId = normalizeOptionalIdentifier((record as Record<string, unknown>).documentId);
+  const documentId = normalizeOptionalIdentifier(readOwnDataProperty(record, 'documentId'));
   if (documentId !== undefined) {
     captured.documentId = documentId;
   }
@@ -225,13 +237,13 @@ export function normalizeCapturedErrorV1(input: unknown): CapturedErrorV1 {
 
 export function normalizeCapturedStateMutationV1(input: unknown): CapturedStateMutationV1 {
   const record = isObjectLike(input) ? input : {};
-  const mutation = normalizeKoshkoStateMutationV1(record.mutation);
-  const observedAt = normalizeTimestamp(record.observedAt);
-  const tabId = normalizeFrameNumber(record.tabId);
-  const frameId = normalizeFrameNumber(record.frameId);
-  const navigationId = normalizeIdentifier(record.navigationId, INVALID_VALUE);
-  const frameUrl = normalizeUrlLike(record.frameUrl);
-  const frameOrigin = normalizeFrameOrigin(record.frameOrigin, frameUrl);
+  const mutation = normalizeKoshkoStateMutationV1(readOwnDataProperty(record, 'mutation'));
+  const observedAt = normalizeTimestamp(readOwnDataProperty(record, 'observedAt'));
+  const tabId = normalizeFrameNumber(readOwnDataProperty(record, 'tabId'));
+  const frameId = normalizeFrameNumber(readOwnDataProperty(record, 'frameId'));
+  const navigationId = normalizeIdentifier(readOwnDataProperty(record, 'navigationId'), INVALID_VALUE);
+  const frameUrl = normalizeUrlLike(readOwnDataProperty(record, 'frameUrl'));
+  const frameOrigin = normalizeFrameOrigin(readOwnDataProperty(record, 'frameOrigin'), frameUrl);
 
   const captured: CapturedStateMutationV1 = {
     mutation,
@@ -243,7 +255,7 @@ export function normalizeCapturedStateMutationV1(input: unknown): CapturedStateM
     frameOrigin,
   };
 
-  const documentId = normalizeOptionalIdentifier(record.documentId);
+  const documentId = normalizeOptionalIdentifier(readOwnDataProperty(record, 'documentId'));
   if (documentId !== undefined) {
     captured.documentId = documentId;
   }
@@ -285,12 +297,16 @@ export function normalizeJsonValue(input: unknown): JsonValue {
 }
 
 function normalizeStatePatch(input: unknown): KoshkoStatePatchOperationV1[] {
-  if (!Array.isArray(input) || input.length > MAX_ARRAY_LENGTH) {
+  const length = readArrayLength(input);
+  if (length === undefined || length > MAX_STATE_PATCH_OPERATIONS) {
     return [];
   }
 
   const patch: KoshkoStatePatchOperationV1[] = [];
-  for (let index = 0; index < input.length; index += 1) {
+  for (let index = 0; index < length; index += 1) {
+    if (!hasOwnDataProperty(input, index)) {
+      return [];
+    }
     const candidate = readOwnDataProperty(input, index);
     if (!isObjectLike(candidate)) {
       return [];
@@ -362,43 +378,46 @@ export function compareCapturedSignals(left: CapturedSignalV1, right: CapturedSi
 
 function compactSignal(signal: KoshkoSignalV1): KoshkoSignalV1 {
   let current = signal;
-  for (let pass = 0; pass < 3; pass += 1) {
-    if (approximateJsonLength(current) <= MAX_SERIALIZED_BYTES) {
+  const compactors: Array<(value: KoshkoSignalV1) => KoshkoSignalV1> = [
+    (value) => value.details === undefined ? value : { ...value, details: TRUNCATED },
+    (value) => omitOptionalSignalField(value, 'context'),
+    (value) => omitOptionalSignalField(value, 'tags'),
+    (value) => omitOptionalSignalField(value, 'target'),
+    (value) => omitActorLabels(value),
+  ];
+
+  for (const compact of compactors) {
+    if (serializedJsonByteLength(current) <= MAX_SERIALIZED_BYTES) {
       return current;
     }
-
-    if (current.details !== undefined) {
-      current = { ...current, details: TRUNCATED };
-      continue;
-    }
-
-    if (current.context !== undefined) {
-      current = { ...current };
-      delete current.context;
-      continue;
-    }
-
-    if (current.tags !== undefined) {
-      current = { ...current };
-      delete current.tags;
-      continue;
-    }
-
-    if (current.target !== undefined) {
-      current = { ...current };
-      delete current.target;
-    }
+    current = compact(current);
   }
 
   return current;
 }
 
-function approximateJsonLength(value: unknown): number {
-  try {
-    return JSON.stringify(value)?.length ?? 0;
-  } catch {
-    return Number.POSITIVE_INFINITY;
+function omitOptionalSignalField<K extends 'context' | 'tags' | 'target'>(
+  signal: KoshkoSignalV1,
+  key: K,
+): KoshkoSignalV1 {
+  if (signal[key] === undefined) {
+    return signal;
   }
+  const result = { ...signal };
+  delete result[key];
+  return result;
+}
+
+function omitActorLabels(signal: KoshkoSignalV1): KoshkoSignalV1 {
+  if (signal.source.label === undefined && signal.source.instanceLabel === undefined) {
+    return signal;
+  }
+
+  const source: ActorReference = { id: signal.source.id };
+  if (signal.source.instanceId !== undefined) {
+    source.instanceId = signal.source.instanceId;
+  }
+  return { ...signal, source };
 }
 
 function normalizeJsonValueInternal(
@@ -412,7 +431,7 @@ function normalizeJsonValueInternal(
   }
 
   if (typeof input === 'string') {
-    return normalizeText(input, MAX_STRING_CODE_POINTS);
+    return normalizeText(input, MAX_TEXT_CODE_POINTS);
   }
   if (typeof input === 'number') {
     return Number.isFinite(input) ? input : UNSUPPORTED_VALUE;
@@ -437,20 +456,22 @@ function normalizeJsonValueInternal(
   if (seen.has(input)) {
     return CIRCULAR_VALUE;
   }
-  if (depth >= MAX_OBJECT_DEPTH) {
+  if (depth >= MAX_JSON_DEPTH) {
     return TRUNCATED;
   }
   seen.set(input, path.join('.'));
 
-  if (Array.isArray(input)) {
+  if (isArray(input)) {
     const output: JsonValue[] = [];
-    const descriptors = Object.getOwnPropertyDescriptors(input);
-    const numericKeys = Object.keys(descriptors)
-      .filter((key) => key !== 'length' && String(Number(key)) === key)
-      .sort((left, right) => Number(left) - Number(right));
-    const limit = Math.min(numericKeys.length, MAX_ARRAY_LENGTH);
+    const descriptors = readOwnPropertyDescriptors(input);
+    const length = readArrayLength(input);
+    if (descriptors === undefined || length === undefined) {
+      seen.delete(input);
+      return UNSUPPORTED_VALUE;
+    }
+    const limit = Math.min(length, MAX_ARRAY_LENGTH);
     for (let index = 0; index < limit; index += 1) {
-      const key = numericKeys[index];
+      const key = String(index);
       const descriptor = descriptors[key];
       if (!descriptor || !Object.prototype.hasOwnProperty.call(descriptor, 'value')) {
         continue;
@@ -458,40 +479,63 @@ function normalizeJsonValueInternal(
 
       output.push(normalizeJsonValueInternal(descriptor.value, depth + 1, seen, path.concat(key)));
     }
-    if (numericKeys.length > MAX_ARRAY_LENGTH) {
+    if (length > MAX_ARRAY_LENGTH) {
       output.push(TRUNCATED);
     }
     seen.delete(input);
     return output;
   }
 
-  if (input instanceof Date) {
-    const time = input.getTime();
+  const prototype = readPrototype(input);
+  if (prototype === undefined) {
     seen.delete(input);
-    return Number.isFinite(time) ? input.toISOString() : UNSUPPORTED_VALUE;
+    return UNSUPPORTED_VALUE;
   }
 
-  if (input instanceof URL) {
+  if (prototype === Date.prototype) {
+    let time: number;
+    try {
+      time = Date.prototype.getTime.call(input);
+    } catch {
+      seen.delete(input);
+      return UNSUPPORTED_VALUE;
+    }
     seen.delete(input);
-    return sanitizeUrlString(input.toString());
+    return Number.isFinite(time) ? new Date(time).toISOString() : UNSUPPORTED_VALUE;
   }
 
-  const tag = Object.prototype.toString.call(input).slice(8, -1);
-  if (tag === 'Error' || tag === 'DOMException') {
-    const result = normalizeErrorValue(input, tag, depth, seen, path);
+  const errorTag = readErrorTag(input);
+  if (errorTag !== undefined) {
+    const result = normalizeErrorValue(input, errorTag, depth, seen, path);
     seen.delete(input);
     return result;
   }
-  if (tag !== 'Object') {
-    const raw = normalizeText(`[${tag}]`, MAX_TEXT_CODE_POINTS);
+
+  if (prototype === URL.prototype) {
+    let url: string;
+    try {
+      url = URL.prototype.toString.call(input);
+    } catch {
+      seen.delete(input);
+      return UNSUPPORTED_VALUE;
+    }
     seen.delete(input);
-    return raw;
+    return sanitizeUrlString(url);
+  }
+
+  if (prototype !== Object.prototype && prototype !== null) {
+    seen.delete(input);
+    return UNSUPPORTED_VALUE;
   }
 
   const result: Record<string, JsonValue> = {};
-  const descriptors = Object.getOwnPropertyDescriptors(input);
-  const keys = Object.keys(descriptors);
-  const limit = Math.min(keys.length, MAX_OBJECT_KEYS);
+  const descriptors = readOwnPropertyDescriptors(input);
+  if (descriptors === undefined) {
+    seen.delete(input);
+    return UNSUPPORTED_VALUE;
+  }
+  const keys = Object.keys(descriptors).filter((key) => descriptors[key]?.enumerable);
+  const limit = Math.min(keys.length, MAX_OBJECT_PROPERTIES);
 
   for (let index = 0; index < limit; index += 1) {
     const key = keys[index];
@@ -509,7 +553,7 @@ function normalizeJsonValueInternal(
         : normalizeJsonValueInternal(value, depth + 1, seen, nextPath);
   }
 
-  if (keys.length > MAX_OBJECT_KEYS) {
+  if (keys.length > MAX_OBJECT_PROPERTIES) {
     result[TRUNCATED] = TRUNCATED;
   }
 
@@ -525,9 +569,12 @@ function normalizeErrorValue(
   path: string[],
 ): JsonValue {
   const result: Record<string, JsonValue> = { name: tag };
-  const descriptors = Object.getOwnPropertyDescriptors(input);
+  const descriptors = readOwnPropertyDescriptors(input);
+  if (descriptors === undefined) {
+    return UNSUPPORTED_VALUE;
+  }
   const keys = Object.keys(descriptors);
-  const limit = Math.min(keys.length, MAX_OBJECT_KEYS);
+  const limit = Math.min(keys.length, MAX_OBJECT_PROPERTIES);
 
   for (let index = 0; index < limit; index += 1) {
     const key = keys[index];
@@ -544,18 +591,76 @@ function normalizeErrorValue(
         : normalizeJsonValueInternal(value, depth + 1, seen, path.concat(key));
   }
 
-  if (keys.length > MAX_OBJECT_KEYS) {
+  if (keys.length > MAX_OBJECT_PROPERTIES) {
     result[TRUNCATED] = TRUNCATED;
   }
   return result;
+}
+
+function hasPrototypeInChain(input: object, expected: object): boolean {
+  const seen = new Set<object>();
+  let prototype = readPrototype(input);
+  while (prototype !== undefined && prototype !== null && !seen.has(prototype)) {
+    if (prototype === expected) {
+      return true;
+    }
+    seen.add(prototype);
+    prototype = readPrototype(prototype);
+  }
+  return false;
+}
+
+function readErrorTag(input: object): string | undefined {
+  if (hasPrototypeInChain(input, Error.prototype)) {
+    return 'Error';
+  }
+  if (typeof DOMException !== 'undefined' && hasPrototypeInChain(input, DOMException.prototype)) {
+    return 'DOMException';
+  }
+
+  const ownDescriptors = readOwnPropertyDescriptors(input);
+  const message = ownDescriptors?.message;
+  const stack = ownDescriptors?.stack;
+  if (
+    message && Object.prototype.hasOwnProperty.call(message, 'value') &&
+    typeof message.value === 'string' &&
+    stack && Object.prototype.hasOwnProperty.call(stack, 'value') &&
+    typeof stack.value === 'string'
+  ) {
+    return 'Error';
+  }
+
+  const seen = new Set<object>();
+  let prototype = readPrototype(input);
+  while (prototype !== undefined && prototype !== null && !seen.has(prototype)) {
+    seen.add(prototype);
+    const name = readOwnDataProperty(prototype, 'name');
+    if (typeof name === 'string' && (name === 'DOMException' || name.endsWith('Error'))) {
+      return name;
+    }
+    const constructor = readOwnDataProperty(prototype, 'constructor');
+    const constructorName = readOwnDataProperty(constructor, 'name');
+    if (
+      typeof constructorName === 'string' &&
+      (constructorName === 'DOMException' || constructorName.endsWith('Error'))
+    ) {
+      return constructorName;
+    }
+    prototype = readPrototype(prototype);
+  }
+  return undefined;
 }
 
 function sanitizeUrlValue(value: unknown): JsonValue {
   if (typeof value === 'string') {
     return sanitizeUrlString(value);
   }
-  if (value instanceof URL) {
-    return sanitizeUrlString(value.toString());
+  if (isObjectLike(value) && readPrototype(value) === URL.prototype) {
+    try {
+      return sanitizeUrlString(URL.prototype.toString.call(value));
+    } catch {
+      return UNSUPPORTED_VALUE;
+    }
   }
   return normalizeJsonValueInternal(value, 0, new WeakMap<object, string>(), []);
 }
@@ -578,8 +683,14 @@ function normalizeContext(input: unknown): Record<string, string> | undefined {
   }
 
   const result: Record<string, string> = {};
-  const descriptors = Object.getOwnPropertyDescriptors(input);
-  for (const key of Object.keys(descriptors).slice(0, MAX_OBJECT_KEYS)) {
+  const descriptors = readOwnPropertyDescriptors(input);
+  if (descriptors === undefined) {
+    return undefined;
+  }
+  const keys = Object.keys(descriptors)
+    .filter((key) => descriptors[key]?.enumerable)
+    .slice(0, MAX_OBJECT_PROPERTIES);
+  for (const key of keys) {
     const descriptor = descriptors[key];
     if (!descriptor || !Object.prototype.hasOwnProperty.call(descriptor, 'value')) {
       continue;
@@ -613,13 +724,17 @@ function normalizeContextValue(value: unknown): string {
 }
 
 function normalizeTags(input: unknown): string[] | undefined {
-  if (!Array.isArray(input)) {
+  const length = readArrayLength(input);
+  if (length === undefined) {
     return undefined;
   }
 
   const tags: string[] = [];
-  for (const tag of input.slice(0, MAX_ARRAY_LENGTH)) {
-    const normalized = normalizeOptionalIdentifier(tag);
+  for (let index = 0; index < Math.min(length, MAX_ARRAY_LENGTH); index += 1) {
+    if (!hasOwnDataProperty(input, index)) {
+      continue;
+    }
+    const normalized = normalizeOptionalIdentifier(readOwnDataProperty(input, index));
     if (normalized !== undefined) {
       tags.push(normalized);
     }
@@ -629,11 +744,11 @@ function normalizeTags(input: unknown): string[] | undefined {
 }
 
 function normalizeIdentifier(input: unknown, fallback: string): string {
-  const text = normalizeText(String(input ?? ''), MAX_IDENTIFIER_CODE_POINTS).replace(CONTROL_CHARS, '');
+  const text = normalizeText(stringifyPrimitive(input), MAX_IDENTIFIER_CODE_POINTS);
   if (!text) {
     return fallback;
   }
-  return limitCodePoints(text, MAX_IDENTIFIER_CODE_POINTS);
+  return text;
 }
 
 function normalizeOptionalIdentifier(input: unknown): string | undefined {
@@ -648,25 +763,16 @@ function normalizeOptionalText(input: unknown): string | undefined {
   if (input === undefined || input === null) {
     return undefined;
   }
-  const normalized = normalizeText(String(input), MAX_TEXT_CODE_POINTS);
+  const normalized = normalizeText(stringifyPrimitive(input), MAX_TEXT_CODE_POINTS);
   return normalized || undefined;
 }
 
 function normalizeText(input: string, maxCodePoints: number): string {
-  const cleaned = input.replace(CONTROL_CHARS, '');
-  const codePoints = Array.from(cleaned);
-  if (codePoints.length > maxCodePoints) {
+  const cleaned = stripControlCharacters(input);
+  if (!hasAtMostCodePoints(cleaned, maxCodePoints)) {
     return TRUNCATED;
   }
   return cleaned;
-}
-
-function limitCodePoints(text: string, maxCodePoints: number): string {
-  const codePoints = Array.from(text);
-  if (codePoints.length <= maxCodePoints) {
-    return text;
-  }
-  return codePoints.slice(0, maxCodePoints).join('');
 }
 
 function normalizeSeverity(input: unknown): KoshkoSignalV1['severity'] | undefined {
@@ -683,7 +789,7 @@ function normalizeSeverity(input: unknown): KoshkoSignalV1['severity'] | undefin
 }
 
 function normalizePositiveInteger(input: unknown, fallback: number): number {
-  const parsed = typeof input === 'number' ? input : Number(input);
+  const parsed = parsePrimitiveNumber(input);
   if (!Number.isFinite(parsed)) {
     return fallback;
   }
@@ -692,12 +798,12 @@ function normalizePositiveInteger(input: unknown, fallback: number): number {
 }
 
 function normalizeTimestamp(input: unknown): number {
-  const parsed = typeof input === 'number' ? input : Number(input);
+  const parsed = parsePrimitiveNumber(input);
   return Number.isFinite(parsed) ? parsed : Date.now();
 }
 
 function normalizeFrameNumber(input: unknown): number {
-  const parsed = typeof input === 'number' ? input : Number(input);
+  const parsed = parsePrimitiveNumber(input);
   return Number.isFinite(parsed) ? Math.trunc(parsed) : -1;
 }
 
@@ -705,10 +811,14 @@ function normalizeUrlLike(input: unknown): string {
   if (typeof input === 'string') {
     return sanitizeUrlString(input);
   }
-  if (input instanceof URL) {
-    return sanitizeUrlString(input.toString());
+  if (isObjectLike(input) && readPrototype(input) === URL.prototype) {
+    try {
+      return sanitizeUrlString(URL.prototype.toString.call(input));
+    } catch {
+      return '';
+    }
   }
-  return normalizeText(String(input ?? ''), MAX_TEXT_CODE_POINTS);
+  return normalizeText(stringifyPrimitive(input), MAX_TEXT_CODE_POINTS);
 }
 
 function normalizeFrameOrigin(input: unknown, frameUrl: string): string {
@@ -724,7 +834,7 @@ function normalizeFrameOrigin(input: unknown, frameUrl: string): string {
   try {
     return new URL(frameUrl).origin;
   } catch {
-    return normalizeText(String(input ?? ''), MAX_TEXT_CODE_POINTS);
+    return normalizeText(stringifyPrimitive(input), MAX_TEXT_CODE_POINTS);
   }
 }
 
@@ -742,28 +852,23 @@ function isUrlKey(key: string): boolean {
   return URL_KEYS.some((candidate) => normalized.endsWith(candidate) || normalized.includes(candidate));
 }
 
-function isObjectLike(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null;
-}
-
-function readOwnDataProperty(record: object, key: PropertyKey): unknown {
-  try {
-    const descriptor = Object.getOwnPropertyDescriptor(record, key);
-    return descriptor && Object.prototype.hasOwnProperty.call(descriptor, 'value')
-      ? descriptor.value
-      : undefined;
-  } catch {
-    return undefined;
+function stringifyPrimitive(value: unknown): string {
+  switch (typeof value) {
+    case 'string':
+      return value;
+    case 'number':
+    case 'boolean':
+    case 'bigint':
+      return String(value);
+    default:
+      return '';
   }
 }
 
-function hasOwnDataProperty(record: object, key: PropertyKey): boolean {
-  try {
-    const descriptor = Object.getOwnPropertyDescriptor(record, key);
-    return descriptor !== undefined && Object.prototype.hasOwnProperty.call(descriptor, 'value');
-  } catch {
-    return false;
-  }
+function parsePrimitiveNumber(value: unknown): number {
+  return typeof value === 'number' || typeof value === 'string'
+    ? Number(value)
+    : Number.NaN;
 }
 
 function compareNumbers(left: number, right: number): number {

@@ -3,11 +3,14 @@ import {
   compareCapturedSignals,
   normalizeCapturedErrorV1,
   normalizeCapturedSignalV1,
+  normalizeCapturedStateMutationV1,
   normalizeJsonValue,
   normalizeKoshkoErrorV1,
   normalizeKoshkoSignalV1,
   normalizeKoshkoStateMutationV1,
 } from './index';
+import { MAX_SERIALIZED_BYTES, MAX_TEXT_CODE_POINTS } from './limits';
+import { serializedJsonByteLength } from './safe-data';
 
 describe('protocol normalization', () => {
   it('redacts sensitive keys, strips URL queries, and preserves markers', () => {
@@ -214,5 +217,118 @@ describe('protocol normalization', () => {
       ...mutation,
       label: 'x'.repeat(129),
     }).label).toBe('[Truncated]');
+  });
+
+  it('compacts multibyte signal data to the serialized byte limit', () => {
+    const signal = normalizeKoshkoSignalV1({
+      id: 'signal-1',
+      producerId: 'producer-1',
+      producerSequence: 1,
+      occurredAt: 123,
+      source: {
+        id: 'host',
+        label: '😀'.repeat(MAX_TEXT_CODE_POINTS),
+        instanceLabel: '😀'.repeat(MAX_TEXT_CODE_POINTS),
+      },
+      name: 'payment.start',
+    });
+
+    expect(serializedJsonByteLength(signal)).toBeLessThanOrEqual(MAX_SERIALIZED_BYTES);
+    expect(signal.source.label).toBeUndefined();
+    expect(signal.source.instanceLabel).toBeUndefined();
+  });
+
+  it('normalizes signal and captured-envelope accessors without invoking them', () => {
+    let getterInvoked = false;
+    const signal: Record<string, unknown> = {
+      id: 'signal-1',
+      producerId: 'producer-1',
+      producerSequence: 1,
+      occurredAt: 123,
+      source: { id: 'host' },
+      name: 'payment.start',
+    };
+    Object.defineProperty(signal, 'details', {
+      enumerable: true,
+      get() {
+        getterInvoked = true;
+        throw new Error('must not run');
+      },
+    });
+    const capturedSignal: Record<string, unknown> = {
+      signal,
+      observedAt: 124,
+      tabId: 1,
+      frameId: 0,
+      navigationId: 'nav-1',
+      frameUrl: 'https://example.com/path?secret=yes',
+      frameOrigin: 'https://example.com',
+    };
+    Object.defineProperty(capturedSignal, 'documentId', {
+      enumerable: true,
+      get() {
+        getterInvoked = true;
+        throw new Error('must not run');
+      },
+    });
+    const capturedMutation: Record<string, unknown> = {
+      mutation: {
+        id: 'mutation-1',
+        producerId: 'producer-1',
+        producerSequence: 1,
+        occurredAt: 123,
+        patch: [],
+      },
+      observedAt: 124,
+      tabId: 1,
+      frameId: 0,
+      navigationId: 'nav-1',
+      frameUrl: 'https://example.com/path',
+      frameOrigin: 'https://example.com',
+    };
+    Object.defineProperty(capturedMutation, 'frameId', {
+      enumerable: true,
+      get() {
+        getterInvoked = true;
+        throw new Error('must not run');
+      },
+    });
+
+    expect(normalizeKoshkoSignalV1(signal).details).toBeUndefined();
+    expect(normalizeCapturedSignalV1(capturedSignal).documentId).toBeUndefined();
+    expect(normalizeCapturedStateMutationV1(capturedMutation).frameId).toBe(-1);
+    expect(getterInvoked).toBe(false);
+  });
+
+  it('normalizes hostile proxies without throwing or using property gets', () => {
+    let getInvoked = false;
+    const readable = new Proxy({
+      signal: {
+        id: 'signal-1',
+        producerId: 'producer-1',
+        producerSequence: 1,
+        occurredAt: 123,
+        source: { id: 'host' },
+        name: 'payment.start',
+      },
+      observedAt: 124,
+      tabId: 1,
+      frameId: 0,
+      navigationId: 'nav-1',
+      frameUrl: 'https://example.com/path',
+      frameOrigin: 'https://example.com',
+    }, {
+      get() {
+        getInvoked = true;
+        throw new Error('must not run');
+      },
+    });
+    const revocable = Proxy.revocable({}, {});
+    revocable.revoke();
+
+    expect(normalizeCapturedSignalV1(readable).signal.id).toBe('signal-1');
+    expect(getInvoked).toBe(false);
+    expect(() => normalizeCapturedSignalV1(revocable.proxy)).not.toThrow();
+    expect(normalizeCapturedSignalV1(revocable.proxy).signal.id).toBe('[Invalid]');
   });
 });
