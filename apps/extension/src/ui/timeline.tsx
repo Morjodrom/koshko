@@ -93,7 +93,7 @@ const DetailNode = memo(function DetailNode({ data }: NodeProps<TimelineNode>): 
   const detail = data as TimelineDetailNodeData;
   return (
     <section
-      className="timeline-details nodrag nopan"
+      className="timeline-details nodrag nopan nowheel"
       id={`timeline-details-${detail.entryId}`}
       data-testid="timeline-details"
     >

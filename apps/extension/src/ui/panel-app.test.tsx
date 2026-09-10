@@ -488,7 +488,9 @@ describe('PanelApp', () => {
     expect(control.getAttribute('aria-expanded')).toBe('false');
     fireEvent.click(control);
     expect(control.getAttribute('aria-expanded')).toBe('true');
-    expect(screen.getByTestId('timeline-details').textContent).toContain(
+    const details = screen.getByTestId('timeline-details');
+    expect(details.classList).toContain('nowheel');
+    expect(details.textContent).toContain(
       '"result": "ok"',
     );
 

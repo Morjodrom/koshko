@@ -184,9 +184,10 @@ button.ghost { background: transparent; }
 .timeline-flow-target-handle { width: 10px; height: 10px; border: 2px solid var(--noir-surface-raised); background: var(--event-accent); box-shadow: 0 0 0 2px color-mix(in srgb, var(--event-accent) 28%, transparent); pointer-events: none; }
 .timeline-flow-edge path { transition: stroke-width 120ms ease, opacity 120ms ease; }
 .timeline-flow-edge:not(.selected) path { opacity: .78; }
-.timeline-flow-detail { height: 240px !important; padding: 0 !important; }
-.timeline-details { width: 100%; height: 100%; overflow: auto; border: 1px solid var(--noir-line); border-radius: 10px; background: var(--noir-surface-raised); box-shadow: 0 6px 18px var(--noir-shadow); }
+.timeline-flow-detail { max-width: 50vw; height: 240px !important; padding: 0 !important; }
+.timeline-details { min-width: 0; width: 100%; height: 100%; overflow: auto; border: 1px solid var(--noir-line); border-radius: 10px; background: var(--noir-surface-raised); box-shadow: 0 6px 18px var(--noir-shadow); }
 .timeline-details pre, .log-item pre { margin: 0; padding: 12px; font-size: 12px; line-height: 1.55; white-space: pre-wrap; word-break: break-word; }
+.timeline-details pre { overflow-wrap: anywhere; }
 .log { display: grid; gap: 8px; }
 .log-filters { display: grid; grid-template-columns: minmax(220px, 1fr) repeat(2, minmax(180px, auto)); gap: 12px; align-items: start; padding: 12px; border: 1px solid var(--noir-line); border-radius: 10px; background: color-mix(in srgb, var(--noir-surface-raised) 72%, transparent); }
 .log-search { min-width: 0; }
