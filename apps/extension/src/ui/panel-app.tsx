@@ -444,7 +444,8 @@ function AiLog({
     }
   };
   const hasReducedContext = result.omittedEntryCount > 0
-    || result.truncatedValueCount > 0
+    || result.compactedValueCount > 0
+    || result.stateStatus === 'focused'
     || result.stateStatus === 'omitted';
 
   return (
@@ -467,6 +468,7 @@ function AiLog({
               <option value="8k">Approx. 8k tokens</option>
               <option value="16k">Approx. 16k tokens</option>
               <option value="32k">Approx. 32k tokens</option>
+              <option value="64k">Approx. 64k tokens</option>
               <option value="full">Full log</option>
             </select>
           </label>
@@ -484,11 +486,20 @@ function AiLog({
       <div className="ai-log-summary" role="status">
         <span>~{result.estimatedTokens.toLocaleString()} tokens</span>
         <span>{result.includedEntryCount} of {result.includedEntryCount + result.omittedEntryCount} entries</span>
+        <span>
+          Selection: {result.selectionMode === 'all' ? 'all' : `causal · ${result.includedAnchorCount} anchors`}
+        </span>
         <span>State: {result.stateStatus}</span>
       </div>
+      {budget === 'full' ? (
+        <p className="ai-log-warning" data-testid="ai-full-warning">
+          Full log can exceed an LLM context window. Prefer a bounded budget unless every entry is required.
+        </p>
+      ) : null}
       {hasReducedContext ? (
         <p className="ai-log-warning" data-testid="ai-log-warning">
-          Context reduced: {result.omittedEntryCount} oldest entries omitted, {result.truncatedValueCount} oversized values truncated
+          Context reduced: {result.omittedEntryCount} lower-priority entries omitted, {result.compactedValueCount} values compacted
+          {result.stateStatus === 'focused' ? ', and current state focused on selected mutations' : ''}
           {result.stateStatus === 'omitted' ? ', and current state omitted' : ''}.
         </p>
       ) : null}

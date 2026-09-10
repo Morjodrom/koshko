@@ -992,10 +992,14 @@ describe('PanelApp', () => {
     const budget = screen.getByRole('combobox', { name: 'AI log context budget' }) as HTMLSelectElement;
     const preview = screen.getByRole('textbox', { name: 'AI-ready Koshko log' }) as HTMLTextAreaElement;
     expect(budget.value).toBe('16k');
-    expect(preview.value).toContain('"capturedEntries":0');
+    expect(Array.from(budget.options).map((option) => option.value)).toContain('64k');
+    expect(preview.value).toContain('"total":0');
 
     act(() => port.emitCapture(captured()));
-    expect(preview.value).toContain('"id":"signal-1"');
+    expect(preview.value).toContain('"e":"e1"');
+    expect(preview.value).toContain('"name":"host.ready"');
+    expect(preview.value).not.toContain('signal-1');
+    expect(screen.getByText('Selection: all')).toBeTruthy();
 
     fireEvent.click(screen.getByTestId('pause-button'));
     act(() => port.emitCapture(captured({
@@ -1010,6 +1014,8 @@ describe('PanelApp', () => {
 
     fireEvent.click(screen.getByTestId('pause-button'));
     expect(preview.value).toContain('buffered-ai');
+    fireEvent.change(budget, { target: { value: 'full' } });
+    expect(screen.getByTestId('ai-full-warning').textContent).toContain('exceed an LLM context window');
     fireEvent.change(budget, { target: { value: '8k' } });
     expect(budget.value).toBe('8k');
 
