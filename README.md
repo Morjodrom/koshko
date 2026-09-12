@@ -1,89 +1,103 @@
-# Koshko Inspector prototype
+# Koshko Inspector
 
-Disposable Chrome/Chromium-only prototype for inspecting `koshko` window messages emitted by instrumented pages.
+> **Pre-release.** A local Chrome/Chromium DevTools inspector for frontend
+> application flows.
 
-## First MVP requirements
+Koshko captures explicit `koshko` signals, browser JavaScript errors, and
+optional state mutations from an inspected page and permitted frames. Use it to
+debug frontend flows, inspect actor-to-actor events, and review state changes
+without adding a backend, telemetry, or remote export.
 
-- Chrome/Chromium only.
-- Capture only explicit `koshko` window messages.
-- Validate and redact payloads before they reach the panel.
-- Show four focused views in DevTools:
-  - Timeline
-  - Log
-  - Global State
-  - AI Log
-- Keep everything in-memory and easy to throw away later.
-- No search, import, analytics, remote code, or production packaging.
-- Local demo is dev-only: two static HTML pages served by Vite.
+## Capabilities
 
-## Repo layout
+- Validates, normalizes, and redacts captured payloads.
+- Captures `console.error`, uncaught errors, and unhandled promise rejections.
+- Supports per-origin permissions, including cross-origin frames.
+- Pauses, clears, and exports captured signals as JSONL.
+- Keeps captured data in local DevTools-session memory.
+- Provides `@koshko/emitter` and an optional development-only Nano Stores
+  adapter for application instrumentation.
 
-- `apps/extension/` — WXT MV3 DevTools extension
-- `examples/neutral-demo/` — minimal Vite demo with two pages
-- `packages/protocol/` — protocol validation and normalization
-- `packages/emitter/` — tiny page-side emitter helper
-- `packages/nanostores/` — optional, development-only Nano Stores adapter
+## DevTools tabs
 
-The extension depends only on `packages/protocol/`. State-library adapters stay
-in separate packages so adding support for another state manager does not grow
-the extension or couple its release cycle to that library. See
-[`docs/integrations.md`](docs/integrations.md) for the integration architecture
-and consumer setup. Tarball maintainers should also follow
-[`docs/package-distribution.md`](docs/package-distribution.md).
+| Tab | Use |
+| --- | --- |
+| **Timeline** | Actor lanes with explicit source-to-target links, timestamps, errors, and expandable event details. |
+| **Log** | Chronological signals, errors, and state mutations; filter by type or actor and search visible data. |
+| **Global State** | Reconstructed JSON state with snapshot history, live/pinned selection, search, and copy support. |
+| **AI Log** | Local, prompt-ready trace of relevant entries and state. Select an 8k, 16k, 32k, 64k, or full context budget and copy it to the clipboard. |
 
-## Run locally
+Koshko does not send AI Log content to an external service.
 
-### 1) Start the demo site
+## Technical stack
+
+| Area | Technology |
+| --- | --- |
+| Extension | WXT, Manifest V3, Chrome/Chromium DevTools APIs |
+| Panel | React 19, TypeScript, `@xyflow/react`, `json-edit-react` |
+| Protocol | `@koshko/protocol`, `@koshko/emitter`, optional `@koshko/nanostores` |
+| Demo | Vite, Nano Stores |
+| Tooling | tsup, Vitest, strict TypeScript |
+
+## Local development
+
+Requirements: Node.js/npm and Chrome or Chromium with Developer mode.
+
+```bash
+npm ci
+```
+
+Start the demo and extension in separate terminals:
 
 ```bash
 npm run dev:demo
-```
-
-This starts Vite on `http://127.0.0.1:5173`.
-
-### 2) Start the extension dev server
-
-```bash
 npm run dev:extension
 ```
 
-WXT will build a dev-only Chrome extension output under
-`apps/extension/.output/chrome-mv3-dev/chrome-mv3/`.
+The demo runs at `http://127.0.0.1:5173`. The unpacked extension is written to:
 
-## Simplest Chrome install steps
+```text
+apps/extension/.output/chrome-mv3-dev/chrome-mv3/
+```
 
-1. Open `chrome://extensions`.
-2. Turn on **Developer mode**.
-3. Click **Load unpacked**.
-4. Select the generated folder:
-   - `apps/extension/.output/chrome-mv3-dev/chrome-mv3`
-5. Open the extension’s **Options** page.
-6. Enter the origin you want to inspect and grant it.
-   - For the local demo, use `http://127.0.0.1:5173`
-   - For a real product, use that product’s origin
-7. Reload the target tab.
-8. Open DevTools on that tab.
-9. Select the **Koshko** panel.
-10. Click **Run flow** in the demo page or trigger the instrumented product actions.
+Load it in `chrome://extensions`:
 
-## How to inspect a real web product
+1. Enable **Developer mode**.
+2. Click **Load unpacked** and select the directory above.
+3. Open the demo, DevTools, and the **Koshko** panel.
+4. Grant `http://127.0.0.1:5173` access when prompted.
 
-1. Add the product’s origin in the extension Options page.
-2. Grant permission.
-3. Reload the product tab.
-4. Open DevTools and select **Koshko**.
-5. Trigger the app action that emits `koshko` messages.
-6. Read the Timeline or Log panel, or open **AI Log** to copy a compact diagnostic trace into an LLM chat.
+For another application, grant its origin and add development-only instrumentation
+with `@koshko/emitter`. See the [integration guide](docs/integration-guide.md)
+and [integration architecture](docs/integrations.md).
 
-The AI Log combines chronological signals, state mutations, and the latest reconstructed state in a prompt-ready text capsule. Choose an approximate 8k, 16k, or 32k token budget to retain the newest coherent suffix, or choose Full log. Token counts are conservative estimates and vary by model. Koshko does not send the trace to a remote service; **Copy for AI** only writes it to the local clipboard.
+## Local build and checks
 
-Important: the extension cannot infer app semantics or discover module-local
-store instances by itself. A real product must emit messages with the shared
-`@koshko/emitter` helper, or explicitly register selected Nano Stores with the
-development-only `@koshko/nanostores` adapter.
+```bash
+npm run build:packages
+npm exec --workspace=@koshko/extension -- wxt build --browser chrome
+npm run pack:packages
+npm test
+npm run typecheck
+```
 
-## Notes
+The extension build uses the same unpacked output directory. Package tarballs
+are written to ignored `artifacts/`; see
+[package distribution](docs/package-distribution.md).
 
-- The demo has **no production build**. It is meant to be transient.
-- The extension keeps state only in memory.
-- The panel is intentionally plain and minimal.
+## Layout
+
+- `apps/extension/` — extension, DevTools panel, and Options page.
+- `examples/neutral-demo/` — Vite demo.
+- `packages/protocol/` — wire types, validation, normalization, and schema.
+- `packages/emitter/` — page-side emitter.
+- `packages/nanostores/` — optional Nano Stores adapter.
+- `docs/` — integration and package documentation.
+
+## Scope
+
+Koshko reads only explicit `koshko` messages, selected JavaScript failures, and
+state mutations that the application emits or registers. It does not record the
+DOM, capture network traffic, replay actions, infer application semantics, or
+upload captured data. Keep instrumentation behind a compile-time development
+flag so it is excluded from production bundles.
