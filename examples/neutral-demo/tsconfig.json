@@ -7,7 +7,8 @@
     ],
     "noEmit": true,
     "types": [
-      "vite/client"
+      "vite/client",
+      "chrome"
     ],
     "baseUrl": ".",
     "paths": {
@@ -20,7 +21,8 @@
       "@koshko/protocol": [
         "../../packages/protocol/src/index"
       ]
-    }
+    },
+    "jsx": "react-jsx"
   },
   "include": [
     "src",

@@ -27,6 +27,7 @@ function signal(
     observedAt: occurredAt + 2,
     tabId: 17,
     frameId: 0,
+    captureContext: { id: 'top', kind: 'top' as const },
     documentId: 'document-1',
     navigationId: 'navigation-1',
     frameUrl: 'https://demo.example.test/checkout',
@@ -55,6 +56,7 @@ function mutation(
     observedAt: occurredAt + 1,
     tabId: 17,
     frameId: 0,
+    captureContext: { id: 'top', kind: 'top' as const },
     documentId: 'document-1',
     navigationId: 'navigation-1',
     frameUrl: 'https://demo.example.test/checkout',
@@ -86,6 +88,7 @@ function error(
     observedAt: occurredAt + 1,
     tabId: 17,
     frameId: 2,
+    captureContext: { id: 'frame:2', kind: 'frame' as const },
     documentId: 'document-2',
     navigationId: 'navigation-1',
     frameUrl: 'https://demo.example.test/frame',
@@ -139,7 +142,7 @@ describe('formatAiLog', () => {
     expect(dictionary).toMatchObject({
       actors: { a1: { id: 'host' }, a2: { id: 'widget' } },
       producers: { p1: 'producer-1', p2: 'state-producer' },
-      frames: { f1: { id: 0, url: 'https://demo.example.test/checkout' } },
+      frames: { f1: { id: 'top', kind: 'top', url: 'https://demo.example.test/checkout' } },
     });
     expect(records.find((record) => record.e === 'e2')).toMatchObject({
       t: 25,

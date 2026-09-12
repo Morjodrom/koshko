@@ -42,6 +42,10 @@ class FakePanelConnection implements ManagedPanelConnection {
     return () => this.statusListeners.delete(listener);
   }
 
+  clear(): Promise<void> {
+    return Promise.resolve();
+  }
+
   emitCapture(captured: CapturedSignalV1): void {
     for (const listener of this.messageListeners) {
       listener({ type: PANEL_MESSAGE_CAPTURE, kind: 'signal', captured });
@@ -92,6 +96,7 @@ function capturedStateMutation(
     observedAt: Date.parse('2026-09-05T12:34:56.790Z'),
     tabId: 17,
     frameId: 0,
+    captureContext: { id: 'top', kind: 'top' as const },
     navigationId: 'navigation-1',
     frameUrl: 'https://demo.example.test',
     frameOrigin: 'https://demo.example.test',
@@ -114,6 +119,7 @@ function captured(overrides: Partial<CapturedSignalV1> = {}): CapturedSignalV1 {
     observedAt: Date.parse('2026-09-05T12:34:56.790Z'),
     tabId: 17,
     frameId: 0,
+    captureContext: { id: 'top', kind: 'top' as const },
     navigationId: 'navigation-1',
     frameUrl: 'https://demo.example.test',
     frameOrigin: 'https://demo.example.test',
@@ -141,6 +147,7 @@ function capturedError(overrides: Partial<CapturedErrorV1> = {}): CapturedErrorV
     observedAt: Date.parse('2026-09-05T12:34:56.790Z'),
     tabId: 17,
     frameId: 0,
+    captureContext: { id: 'top', kind: 'top' as const },
     navigationId: 'navigation-1',
     frameUrl: 'https://demo.example.test',
     frameOrigin: 'https://demo.example.test',
@@ -182,8 +189,7 @@ function mountPanel(accessController = createAccessController()): {
     <PanelApp
       repository={repository}
       connection={port}
-      tabId={17}
-      accessController={accessController}
+      environment={{ kind: 'extension', tabId: 17, accessController }}
       downloadJsonl={downloadJsonl}
       copyText={copyText}
     />,
@@ -202,6 +208,24 @@ function expandGlobalState(): HTMLElement {
 
 describe('PanelApp', () => {
   afterEach(cleanup);
+
+  it('renders embedded mode without tab-specific access lifecycle controls', () => {
+    const port = new FakePanelConnection();
+    render(
+      <PanelApp
+        repository={new KoshkoRepository()}
+        connection={port}
+        environment={{ kind: 'embedded' }}
+        downloadJsonl={vi.fn()}
+        copyText={vi.fn().mockResolvedValue(undefined)}
+      />,
+    );
+
+    expect(screen.getByRole('heading', { name: 'Koshko Inspector' })).toBeTruthy();
+    expect(screen.queryByTestId('access-checking')).toBeNull();
+    expect(screen.queryByTestId('access-active')).toBeNull();
+    expect(screen.queryByTestId('access-required')).toBeNull();
+  });
 
   it('grants the inspected site explicitly and explains missed startup events', async () => {
     const accessController = createAccessController({
@@ -1028,8 +1052,10 @@ describe('PanelApp', () => {
     const currentPreview = (screen.getByRole('textbox', { name: 'AI-ready Koshko log' }) as HTMLTextAreaElement).value;
     fireEvent.click(screen.getByRole('button', { name: 'Copy for AI' }));
 
-    await waitFor(() => expect(copyText).toHaveBeenCalledWith(currentPreview));
-    expect(screen.getByText('Copied AI-ready log.')).toBeTruthy();
+    await waitFor(() => {
+      expect(copyText).toHaveBeenCalledWith(currentPreview);
+      expect(screen.getByText('Copied AI-ready log.')).toBeTruthy();
+    });
   });
 
   it('keeps the AI log selectable when clipboard access fails', async () => {

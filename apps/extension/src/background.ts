@@ -87,11 +87,15 @@ async function routeCaptureMessage(message: CaptureTransportMessage, sender: chr
   if (tabId == null) {
     return;
   }
+  const frameId = sender.frameId;
 
   const metadata = {
     observedAt: message.observedAt,
     tabId,
-    frameId: sender.frameId ?? -1,
+    ...(frameId === undefined ? {} : { frameId }),
+    captureContext: frameId === 0
+      ? { id: 'top', kind: 'top' as const }
+      : { id: `frame:${frameId ?? -1}`, kind: 'frame' as const },
     documentId: sender.documentId,
     navigationId: message.navigationId,
     frameUrl: message.frameUrl,

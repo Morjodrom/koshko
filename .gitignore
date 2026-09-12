@@ -9,3 +9,6 @@ coverage/
 **/coverage/
 artifacts/
 .idea/
+playwright-report/
+test-results/
+blob-report/

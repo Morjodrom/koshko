@@ -126,7 +126,7 @@ export class KoshkoRepository {
 
   record(captured: KoshkoLogEntry): void {
     const identity = this.getDocumentIdentity(captured);
-    if (captured.frameId === 0 && identity !== undefined) {
+    if (captured.captureContext.kind === 'top' && identity !== undefined) {
       if (this.topFrameIdentity !== undefined && this.topFrameIdentity !== identity) {
         this.reset();
       }

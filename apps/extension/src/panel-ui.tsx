@@ -24,8 +24,11 @@ createRoot(mountTarget).render(
   <PanelApp
     repository={repository}
     connection={port}
-    tabId={tabId}
-    accessController={createPanelAccessController(tabId)}
+    environment={{
+      kind: 'extension',
+      tabId,
+      accessController: createPanelAccessController(tabId),
+    }}
     downloadJsonl={(jsonl) => {
       const blob = new Blob([jsonl], { type: 'application/jsonl' });
       const url = URL.createObjectURL(blob);

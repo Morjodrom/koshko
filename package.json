@@ -22,7 +22,9 @@
     "release:packages": "npm run build:packages && changeset publish",
     "prepare": "npm run build:packages",
     "test": "npm run build:packages && npm run test --workspaces --if-present",
-    "typecheck": "npm run build:packages && npm run typecheck --workspaces --if-present"
+    "typecheck": "npm run build:packages && npm run typecheck --workspaces --if-present",
+    "test:e2e": "playwright test -c tests/e2e/playwright.config.ts",
+    "test:e2e:extension": "npm run build:packages && npm run build --workspace=@koshko/extension && KOSHKO_RUN_EXTENSION_SMOKE=1 playwright test -c tests/e2e/playwright.config.ts extension-coexistence.spec.ts"
   },
   "devDependencies": {
     "@types/chrome": "^0.0.289",
@@ -37,6 +39,7 @@
     "typescript": "^5.7.3",
     "vite": "^6.1.0",
     "vitest": "^3.0.5",
-    "wxt": "^0.19.20"
+    "wxt": "^0.19.20",
+    "@playwright/test": "^1.55.0"
   }
 }

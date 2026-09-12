@@ -43,11 +43,20 @@ import { Timeline } from './timeline';
 export interface PanelAppProps {
   repository: KoshkoRepository;
   connection: ManagedPanelConnection;
-  tabId: number;
-  accessController: PanelAccessController;
   downloadJsonl: (jsonl: string) => void;
   copyText: (text: string) => Promise<void>;
+  environment: PanelEnvironment;
 }
+
+export type PanelEnvironment =
+  | {
+    kind: 'extension';
+    tabId: number;
+    accessController: PanelAccessController;
+  }
+  | {
+    kind: 'embedded';
+  };
 
 type AccessState =
   | { status: 'checking' }
@@ -61,10 +70,9 @@ type AccessState =
 export function PanelApp({
   repository,
   connection,
-  tabId,
-  accessController,
   downloadJsonl,
   copyText,
+  environment,
 }: PanelAppProps): ReactElement {
   const [activeTab, setActiveTab] = useState<'timeline' | 'log' | 'state' | 'ai'>('timeline');
   const [connectionStatus, setConnectionStatus] = useState<PanelConnectionStatus>(
@@ -104,8 +112,11 @@ export function PanelApp({
   );
   const targetRevision = useRef(0);
   const grantInFlight = useRef(false);
+  const extensionEnvironment = environment.kind === 'extension' ? environment : undefined;
 
   useEffect(() => {
+    if (!extensionEnvironment) return undefined;
+    const { accessController } = extensionEnvironment;
     let mounted = true;
     let revision = 0;
     const refresh = async (url?: string): Promise<void> => {
@@ -177,7 +188,7 @@ export function PanelApp({
       mounted = false;
       unsubscribe();
     };
-  }, [accessController]);
+  }, [extensionEnvironment]);
 
   useLayoutEffect(() => {
     const syncFromRepository = (): void => {
@@ -228,6 +239,8 @@ export function PanelApp({
     repository.setPaused(!repository.isPaused);
   };
   const grantAccess = (site: InspectedSite): void => {
+    if (!extensionEnvironment) return;
+    const { accessController } = extensionEnvironment;
     const grantRevision = targetRevision.current;
     grantInFlight.current = true;
     setAccess({ status: 'granting', site });
@@ -253,8 +266,19 @@ export function PanelApp({
     });
   };
   const clear = (): void => {
-    setExpandedEntryIds(new Set());
-    repository.clear();
+    if (extensionEnvironment) {
+      setExpandedEntryIds(new Set());
+      void connection.clear();
+      repository.clear();
+      return;
+    }
+    void connection.clear().then(() => {
+      setExpandedEntryIds(new Set());
+      repository.clear();
+    }).catch(() => {
+      // The embedded host may be unavailable. Keep the displayed repository
+      // intact rather than claiming that undelivered events were discarded.
+    });
   };
   const selectStateSnapshot = (index: number | null): void => {
     repository.selectStateSnapshot(index);
@@ -298,7 +322,7 @@ export function PanelApp({
       <header className="toolbar card">
         <div className="toolbar-copy">
           <BrandLockup compact />
-          <h1>Tab {tabId}</h1>
+          <h1>{extensionEnvironment ? `Tab ${extensionEnvironment.tabId}` : 'Koshko Inspector'}</h1>
           <p className="muted" data-testid="capture-status">
             {timelineEntries.length} event{timelineEntries.length === 1 ? '' : 's'} captured
             {paused ? ` · paused · +${unreadCount} unread` : ''}
@@ -326,11 +350,13 @@ export function PanelApp({
           </button>
         </div>
       </header>
-      <AccessNotice
-        access={access}
-        onGrant={grantAccess}
-        onReload={() => accessController.reload()}
-      />
+      {extensionEnvironment ? (
+        <AccessNotice
+          access={access}
+          onGrant={grantAccess}
+          onReload={() => extensionEnvironment.accessController.reload()}
+        />
+      ) : null}
       <nav className="tabs card">
         <button
           className={activeTab === 'timeline' ? 'tab active' : 'tab'}

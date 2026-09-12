@@ -1,6 +1,6 @@
 import { defineContentScript } from 'wxt/sandbox';
 import { injectScript } from 'wxt/client';
-import { startCapture } from '../src/capture';
+import { startChromeCapture } from '../src/capture';
 
 export default defineContentScript({
   // Runtime registration supplies the granted origins. WXT's development
@@ -10,7 +10,7 @@ export default defineContentScript({
   runAt: 'document_start',
   registration: 'runtime',
   main() {
-    startCapture();
+    startChromeCapture();
     void injectScript('/console-capture.js').catch(() => {});
   },
 });

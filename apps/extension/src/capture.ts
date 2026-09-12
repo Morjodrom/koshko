@@ -10,7 +10,9 @@ interface CaptureGlobal extends Window {
   [CAPTURE_STATE]?: { stop: () => void };
 }
 
-export function startCapture(): () => void {
+export type CaptureDelivery = (message: CaptureTransportMessage) => void | Promise<void>;
+
+export function startCapture(deliver: CaptureDelivery): () => void {
   const captureGlobal = window as CaptureGlobal;
   const existing = captureGlobal[CAPTURE_STATE];
   if (existing) {
@@ -44,7 +46,11 @@ export function startCapture(): () => void {
       payload = { type: PANEL_MESSAGE_CAPTURE, kind: 'state-mutation', mutation: parsed.mutation, ...metadata };
     }
 
-    void chrome.runtime.sendMessage(payload).catch(() => {});
+    try {
+      void Promise.resolve(deliver(payload)).catch(() => {});
+    } catch {
+      // Capture delivery must never break the observed page.
+    }
   };
   window.addEventListener('message', onMessage);
 
@@ -61,6 +67,10 @@ export function startCapture(): () => void {
   };
   captureGlobal[CAPTURE_STATE] = { stop };
   return stop;
+}
+
+export function startChromeCapture(): () => void {
+  return startCapture((message) => chrome.runtime.sendMessage(message));
 }
 
 function createNavigationId(): string {

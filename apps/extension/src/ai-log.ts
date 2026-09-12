@@ -794,7 +794,8 @@ function registerFrame(
   navigations: Map<string, string>,
 ): string {
   const key = JSON.stringify([
-    entry.frameId,
+    entry.captureContext.id,
+    entry.captureContext.kind,
     entry.frameOrigin,
     entry.frameUrl,
     entry.documentId,
@@ -810,7 +811,8 @@ function registerFrame(
   frames.set(key, {
     alias,
     value: compactObject({
-      id: entry.frameId,
+      id: entry.captureContext.id,
+      kind: entry.captureContext.kind,
       url: entry.frameUrl,
       origin: isRedundantOrigin(entry.frameOrigin, entry.frameUrl) ? undefined : entry.frameOrigin,
       document,

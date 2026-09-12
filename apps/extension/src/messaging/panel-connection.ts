@@ -31,6 +31,11 @@ export interface ManagedPanelConnection {
   readonly status: PanelConnectionStatus;
   subscribe(listener: MessageListener): () => void;
   subscribeStatus(listener: StatusListener): () => void;
+  /**
+   * Discards capture state retained by the transport. The extension transport
+   * does not retain events, while an embedded host acknowledges this request.
+   */
+  clear(): Promise<void>;
 }
 
 /** Keeps a panel attached across MV3 service-worker restarts. */
@@ -63,6 +68,10 @@ export class PanelConnection implements ManagedPanelConnection {
     this.statusListeners.add(listener);
     listener(this.status);
     return () => this.statusListeners.delete(listener);
+  }
+
+  clear(): Promise<void> {
+    return Promise.resolve();
   }
 
   dispose(): void {

@@ -1,11 +1,32 @@
 # Neutral demo
 
-Development-only, local Vite fixture for manual Koshko Inspector checks and scenario regression tests.
+Development-only, local Vite fixture for manual Koshko Inspector checks,
+scenario regression tests, and embedded-inspector Playwright coverage.
 
 ## Run
 
 ```bash
 npm run dev:demo
+```
+
+The page includes the same Inspector UI in a resizable right-hand iframe dock.
+The top page and both registered widget iframes send locally captured signals,
+state mutations, and browser errors through a validated, same-origin bridge.
+The dock can be collapsed and becomes a full-width section on narrow screens.
+It is a test fixture, not an embeddable production API.
+
+## Embedded E2E
+
+```bash
+npm run test:e2e
+```
+
+The embedded suite uses ordinary Playwright locators against the inspector
+iframe. The optional Chromium-only MV3 coexistence smoke is intentionally
+separate because it builds and loads the real unpacked extension:
+
+```bash
+npm run test:e2e:extension
 ```
 
 ## Scenarios
@@ -63,4 +84,4 @@ runtime dependency.
 7. Open or reload the demo at `http://127.0.0.1:5173`.
 8. Open Chrome DevTools, select **Koshko Inspector**, then run each scenario.
 
-No production build is provided and no data leaves the browser.
+No captured data leaves the browser.

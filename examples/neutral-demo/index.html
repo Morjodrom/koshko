@@ -7,66 +7,69 @@
     <script type="module" src="/src/main.ts"></script>
     <style>
       :root { color-scheme: light dark; font-family: system-ui, sans-serif; }
-      body { margin: 0; padding: 20px; background: Canvas; color: CanvasText; }
-      .shell { display: grid; gap: 12px; max-width: 980px; margin: auto; }
+      body { margin: 0; background: Canvas; color: CanvasText; }
+      .demo-layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(360px, 44vw); min-height: 100vh; }
+      .shell { display: grid; gap: 12px; max-width: 980px; margin: auto; padding: 20px; }
       .row { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
       .frames { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); }
       .nanostores { display: grid; gap: 12px; padding: 12px; border: 1px solid color-mix(in oklab, CanvasText 15%, transparent); border-radius: 8px; }
       .nanostores h2 { margin: 0; font-size: 1.1rem; }
-      iframe { width: 100%; min-height: 180px; border: 1px solid color-mix(in oklab, CanvasText 15%, transparent); border-radius: 8px; }
+      .widget-frame { width: 100%; min-height: 180px; border: 1px solid color-mix(in oklab, CanvasText 15%, transparent); border-radius: 8px; }
       pre { margin: 0; padding: 12px; background: color-mix(in oklab, Canvas 85%, CanvasText 15%); border-radius: 8px; white-space: pre-wrap; max-height: 460px; overflow: auto; }
       button { padding: 8px 12px; }
       input[type="number"] { width: 4rem; padding: 7px; }
       .hint { opacity: .75; margin: 0; }
+      .inspector-dock { position: relative; display: grid; grid-template-rows: auto minmax(0, 1fr); min-width: 360px; resize: horizontal; overflow: hidden; border-left: 1px solid color-mix(in oklab, CanvasText 20%, transparent); background: Canvas; }
+      .inspector-dock__toolbar { display: flex; justify-content: flex-end; padding: 8px; border-bottom: 1px solid color-mix(in oklab, CanvasText 15%, transparent); }
+      .inspector-dock iframe { width: 100%; height: 100%; min-height: 0; border: 0; }
+      .inspector-dock.is-collapsed { min-width: 0; width: auto !important; resize: none; grid-template-rows: auto; }
+      .inspector-dock.is-collapsed iframe { display: none; }
+      @media (max-width: 900px) {
+        .demo-layout { grid-template-columns: 1fr; }
+        .inspector-dock { min-height: 620px; min-width: 0; resize: none; border-left: 0; border-top: 1px solid color-mix(in oklab, CanvasText 20%, transparent); }
+      }
     </style>
   </head>
   <body>
-    <main class="shell">
-      <header>
-        <h1>Koshko regression fixture</h1>
-        <p class="hint">Actors: User, Host application, Client SDK, and Widget instances. Each scenario generates a fresh correlation ID.</p>
-      </header>
-      <div class="row" aria-label="Demo scenarios">
-        <button data-scenario="success">Run successful flow</button>
-        <button data-scenario="failure-recovery">Run failure and recovery</button>
-        <button data-scenario="metadata-rich">Run metadata-rich flow</button>
-        <strong id="status" aria-live="polite">Loading…</strong>
-      </div>
-      <div class="row" aria-label="Global state mutations">
-        <button data-state-mutation="add">Add global state</button>
-        <button data-state-mutation="replace">Replace global state value</button>
-        <button data-state-mutation="remove">Remove global state value</button>
-      </div>
-      <div class="row" aria-label="Large global state fixture">
-        <label>
-          Maximum depth
-          <input id="large-state-depth" type="number" min="2" max="5" step="1" value="5" />
-        </label>
-        <label>
-          Root objects
-          <input id="large-state-roots" type="number" min="1" max="10" step="1" value="10" />
-        </label>
-        <button id="generate-large-state">Generate large state</button>
-      </div>
-      <section class="nanostores" aria-labelledby="nanostores-heading">
-        <h2 id="nanostores-heading">Nano Stores</h2>
-        <p class="hint">These action-wrapped mutations are bridged to <code>nanostores.counter</code> and <code>nanostores.profile</code> in Koshko Global State.</p>
-        <div class="row" aria-label="Nano Stores counter mutations">
-          <button data-nanostore-mutation="counter-increment">Increment counter</button>
-          <button data-nanostore-mutation="counter-reset">Reset counter</button>
+    <div class="demo-layout">
+      <main class="shell">
+        <header>
+          <h1>Koshko regression fixture</h1>
+          <p class="hint">Actors: User, Host application, Client SDK, and Widget instances. Each scenario generates a fresh correlation ID.</p>
+        </header>
+        <div class="row" aria-label="Demo scenarios">
+          <button data-scenario="success">Run successful flow</button>
+          <button data-scenario="failure-recovery">Run failure and recovery</button>
+          <button data-scenario="metadata-rich">Run metadata-rich flow</button>
+          <strong id="status" aria-live="polite">Loading…</strong>
         </div>
-        <div class="row" aria-label="Nano Stores profile mutations">
-          <button data-nanostore-mutation="profile-visit">Add profile visit</button>
-          <button data-nanostore-mutation="profile-name">Change profile name</button>
-          <button data-nanostore-mutation="profile-reset">Reset profile</button>
+        <div class="row" aria-label="Global state mutations">
+          <button data-state-mutation="add">Add global state</button>
+          <button data-state-mutation="replace">Replace global state value</button>
+          <button data-state-mutation="remove">Remove global state</button>
         </div>
-        <pre id="nanostores-value" aria-live="polite"></pre>
-      </section>
-      <div class="frames">
-        <iframe id="frame-embedded" title="Embedded Widget" src="/frame.html?instance=embedded"></iframe>
-        <iframe id="frame-processing" title="Processing Widget" src="/frame.html?instance=processing"></iframe>
-      </div>
-      <pre id="log" aria-live="polite"></pre>
-    </main>
+        <div class="row" aria-label="Large global state fixture">
+          <label>Maximum depth <input id="large-state-depth" type="number" min="2" max="5" step="1" value="5" /></label>
+          <label>Root objects <input id="large-state-roots" type="number" min="1" max="10" step="1" value="10" /></label>
+          <button id="generate-large-state">Generate large state</button>
+        </div>
+        <section class="nanostores" aria-labelledby="nanostores-heading">
+          <h2 id="nanostores-heading">Nano Stores</h2>
+          <p class="hint">These action-wrapped mutations are bridged to <code>nanostores.counter</code> and <code>nanostores.profile</code> in Koshko Global State.</p>
+          <div class="row" aria-label="Nano Stores counter mutations"><button data-nanostore-mutation="counter-increment">Increment counter</button><button data-nanostore-mutation="counter-reset">Reset counter</button></div>
+          <div class="row" aria-label="Nano Stores profile mutations"><button data-nanostore-mutation="profile-visit">Add profile visit</button><button data-nanostore-mutation="profile-name">Change profile name</button><button data-nanostore-mutation="profile-reset">Reset profile</button></div>
+          <pre id="nanostores-value" aria-live="polite"></pre>
+        </section>
+        <div class="frames">
+          <iframe class="widget-frame" id="frame-embedded" title="Embedded Widget" src="/frame.html?instance=embedded"></iframe>
+          <iframe class="widget-frame" id="frame-processing" title="Processing Widget" src="/frame.html?instance=processing"></iframe>
+        </div>
+        <pre id="log" aria-live="polite"></pre>
+      </main>
+      <aside class="inspector-dock" id="koshko-inspector-dock" aria-label="Koshko Inspector">
+        <div class="inspector-dock__toolbar"><button id="toggle-koshko-inspector" aria-expanded="true">Hide inspector</button></div>
+        <iframe id="koshko-inspector" title="Koshko Inspector" src="/inspector.html"></iframe>
+      </aside>
+    </div>
   </body>
 </html>

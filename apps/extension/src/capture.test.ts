@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { startCapture } from './capture';
+import { startCapture, startChromeCapture } from './capture';
 import { PANEL_MESSAGE_CAPTURE } from './messaging/messages';
 
 describe('window capture', () => {
@@ -15,7 +15,7 @@ describe('window capture', () => {
   it('forwards valid signals with capture metadata', () => {
     const sendMessage = vi.fn(() => Promise.resolve());
     vi.stubGlobal('chrome', { runtime: { sendMessage } });
-    cleanups.push(startCapture());
+    cleanups.push(startChromeCapture());
 
     dispatchSelfMessage({
       protocol: 'koshko',
@@ -47,7 +47,7 @@ describe('window capture', () => {
   it('forwards normalized and redacted state mutations with capture metadata', () => {
     const sendMessage = vi.fn(() => Promise.resolve());
     vi.stubGlobal('chrome', { runtime: { sendMessage } });
-    cleanups.push(startCapture());
+    cleanups.push(startChromeCapture());
 
     dispatchSelfMessage({
       protocol: 'koshko',
@@ -81,7 +81,7 @@ describe('window capture', () => {
   it('forwards normalized browser errors as error transport messages', () => {
     const sendMessage = vi.fn(() => Promise.resolve());
     vi.stubGlobal('chrome', { runtime: { sendMessage } });
-    cleanups.push(startCapture());
+    cleanups.push(startChromeCapture());
 
     dispatchSelfMessage({
       protocol: 'koshko',
@@ -120,7 +120,7 @@ describe('window capture', () => {
   it('ignores malformed, unsupported, and non-self window messages', () => {
     const sendMessage = vi.fn(() => Promise.resolve());
     vi.stubGlobal('chrome', { runtime: { sendMessage } });
-    cleanups.push(startCapture());
+    cleanups.push(startChromeCapture());
 
     dispatchSelfMessage({ protocol: 'koshko', version: 1, type: 'signal', signal: {} });
     dispatchSelfMessage({ protocol: 'koshko', version: 1, type: 'unsupported' });
@@ -135,11 +135,35 @@ describe('window capture', () => {
   it('installs only one listener when capture is activated repeatedly', () => {
     const sendMessage = vi.fn(() => Promise.resolve());
     vi.stubGlobal('chrome', { runtime: { sendMessage } });
-    cleanups.push(startCapture(), startCapture());
+    cleanups.push(startChromeCapture(), startChromeCapture());
 
     dispatchSelfMessage(validSignalMessage());
 
     expect(sendMessage).toHaveBeenCalledTimes(1);
+  });
+
+  it('delivers captures through an injected transport', () => {
+    const deliver = vi.fn();
+    cleanups.push(startCapture(deliver));
+
+    dispatchSelfMessage(validSignalMessage());
+
+    expect(deliver).toHaveBeenCalledWith(expect.objectContaining({
+      type: PANEL_MESSAGE_CAPTURE,
+      kind: 'signal',
+      signal: expect.objectContaining({ id: 'signal-1' }),
+    }));
+  });
+
+  it('contains synchronous delivery failures', () => {
+    const deliver = vi.fn(() => {
+      throw new Error('bridge disconnected');
+    });
+    cleanups.push(startCapture(deliver));
+
+    expect(() => dispatchSelfMessage(validSignalMessage())).not.toThrow();
+
+    expect(deliver).toHaveBeenCalledTimes(1);
   });
 });
 

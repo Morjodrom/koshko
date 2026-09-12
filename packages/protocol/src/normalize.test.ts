@@ -82,7 +82,43 @@ describe('protocol normalization', () => {
     });
 
     expect(a.frameUrl).toBe('https://example.com/a');
+    expect(a.captureContext).toEqual({ id: 'frame:2', kind: 'frame' });
     expect(compareCapturedSignals(a, b)).toBeGreaterThan(0);
+  });
+
+  it('uses valid explicit capture context and synthesizes legacy contexts', () => {
+    const explicit = normalizeCapturedSignalV1({
+      signal: {},
+      observedAt: 1,
+      tabId: 17,
+      frameId: 0,
+      captureContext: { id: 'embedded', kind: 'frame' },
+      navigationId: 'nav-1',
+      frameUrl: 'https://example.com',
+      frameOrigin: 'https://example.com',
+    });
+    const legacy = normalizeCapturedSignalV1({
+      signal: {},
+      observedAt: 1,
+      tabId: 17,
+      frameId: 0,
+      navigationId: 'nav-1',
+      frameUrl: 'https://example.com',
+      frameOrigin: 'https://example.com',
+    });
+    const metadataFree = normalizeCapturedSignalV1({
+      signal: {},
+      observedAt: 1,
+      navigationId: 'nav-1',
+      frameUrl: 'https://example.com',
+      frameOrigin: 'https://example.com',
+    });
+
+    expect(explicit.captureContext).toEqual({ id: 'embedded', kind: 'frame' });
+    expect(legacy.captureContext).toEqual({ id: 'top', kind: 'top' });
+    expect(metadataFree.captureContext).toEqual({ id: 'frame:-1', kind: 'frame' });
+    expect(metadataFree.tabId).toBeUndefined();
+    expect(metadataFree.frameId).toBeUndefined();
   });
 
   it('keeps JSON normalization safe for unsupported values', () => {
@@ -329,7 +365,11 @@ describe('protocol normalization', () => {
 
     expect(normalizeKoshkoSignalV1(signal).details).toBeUndefined();
     expect(normalizeCapturedSignalV1(capturedSignal).documentId).toBeUndefined();
-    expect(normalizeCapturedStateMutationV1(capturedMutation).frameId).toBe(-1);
+    expect(normalizeCapturedStateMutationV1(capturedMutation).frameId).toBeUndefined();
+    expect(normalizeCapturedStateMutationV1(capturedMutation).captureContext).toEqual({
+      id: 'frame:-1',
+      kind: 'frame',
+    });
     expect(getterInvoked).toBe(false);
   });
 

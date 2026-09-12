@@ -77,37 +77,32 @@ export interface KoshkoStateMutationV1 {
   patch: KoshkoStatePatchOperationV1[];
 }
 
-export interface CapturedSignalV1 {
+export interface CaptureContextV1 {
+  id: string;
+  kind: 'top' | 'frame';
+}
+
+export interface CapturedMetadataV1 {
+  observedAt: number;
+  captureContext: CaptureContextV1;
+  tabId?: number;
+  frameId?: number;
+  documentId?: string;
+  navigationId: string;
+  frameUrl: string;
+  frameOrigin: string;
+}
+
+export interface CapturedSignalV1 extends CapturedMetadataV1 {
   signal: KoshkoSignalV1;
-  observedAt: number;
-  tabId: number;
-  frameId: number;
-  documentId?: string;
-  navigationId: string;
-  frameUrl: string;
-  frameOrigin: string;
 }
 
-export interface CapturedErrorV1 {
+export interface CapturedErrorV1 extends CapturedMetadataV1 {
   error: KoshkoErrorV1;
-  observedAt: number;
-  tabId: number;
-  frameId: number;
-  documentId?: string;
-  navigationId: string;
-  frameUrl: string;
-  frameOrigin: string;
 }
 
-export interface CapturedStateMutationV1 {
+export interface CapturedStateMutationV1 extends CapturedMetadataV1 {
   mutation: KoshkoStateMutationV1;
-  observedAt: number;
-  tabId: number;
-  frameId: number;
-  documentId?: string;
-  navigationId: string;
-  frameUrl: string;
-  frameOrigin: string;
 }
 
 export interface KoshkoWindowMessageV1 {

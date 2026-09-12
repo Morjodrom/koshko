@@ -13,6 +13,8 @@ export type {
   AnyKoshkoWindowMessageV1,
   KoshkoWindowMessageV1,
   ActorReference,
+  CaptureContextV1,
+  CapturedMetadataV1,
   CapturedStateMutationV1,
   CapturedSignalV1,
   CapturedErrorV1,
@@ -35,6 +37,7 @@ export {
   normalizeCapturedStateMutationV1,
   normalizeCapturedSignalV1,
   normalizeCapturedErrorV1,
+  normalizeCaptureContextV1,
   normalizeJsonValue,
 } from './normalize';
 export {

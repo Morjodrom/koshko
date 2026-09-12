@@ -8,6 +8,8 @@ import type {
   CapturedStateMutationV1,
   CapturedSignalV1,
   CapturedErrorV1,
+  CapturedMetadataV1,
+  CaptureContextV1,
   JsonValue,
   KoshkoErrorV1,
   KoshkoErrorWindowMessageV1,
@@ -186,82 +188,78 @@ export function normalizeKoshkoStateMutationV1(input: unknown): KoshkoStateMutat
 export function normalizeCapturedSignalV1(input: unknown): CapturedSignalV1 {
   const record = isObjectLike(input) ? input : {};
   const signal = normalizeKoshkoSignalV1(readOwnDataProperty(record, 'signal'));
-  const observedAt = normalizeTimestamp(readOwnDataProperty(record, 'observedAt'));
-  const tabId = normalizeFrameNumber(readOwnDataProperty(record, 'tabId'));
-  const frameId = normalizeFrameNumber(readOwnDataProperty(record, 'frameId'));
-  const navigationId = normalizeIdentifier(readOwnDataProperty(record, 'navigationId'), INVALID_VALUE);
-  const frameUrl = normalizeUrlLike(readOwnDataProperty(record, 'frameUrl'));
-  const frameOrigin = normalizeFrameOrigin(readOwnDataProperty(record, 'frameOrigin'), frameUrl);
-
   const captured: CapturedSignalV1 = {
     signal,
-    observedAt,
-    tabId,
-    frameId,
-    navigationId,
-    frameUrl,
-    frameOrigin,
+    ...normalizeCapturedMetadata(record),
   };
-
-  const documentId = normalizeOptionalIdentifier(readOwnDataProperty(record, 'documentId'));
-  if (documentId !== undefined) {
-    captured.documentId = documentId;
-  }
-
   return captured;
 }
 
 export function normalizeCapturedErrorV1(input: unknown): CapturedErrorV1 {
   const record = isObjectLike(input) ? input : {};
   const error = normalizeKoshkoErrorV1(readOwnDataProperty(record, 'error'));
-  const observedAt = normalizeTimestamp(readOwnDataProperty(record, 'observedAt'));
-  const tabId = normalizeFrameNumber(readOwnDataProperty(record, 'tabId'));
-  const frameId = normalizeFrameNumber(readOwnDataProperty(record, 'frameId'));
-  const navigationId = normalizeIdentifier(readOwnDataProperty(record, 'navigationId'), INVALID_VALUE);
-  const frameUrl = normalizeUrlLike(readOwnDataProperty(record, 'frameUrl'));
-  const frameOrigin = normalizeFrameOrigin(readOwnDataProperty(record, 'frameOrigin'), frameUrl);
   const captured: CapturedErrorV1 = {
     error,
-    observedAt,
-    tabId,
-    frameId,
-    navigationId,
-    frameUrl,
-    frameOrigin,
+    ...normalizeCapturedMetadata(record),
   };
-  const documentId = normalizeOptionalIdentifier(readOwnDataProperty(record, 'documentId'));
-  if (documentId !== undefined) {
-    captured.documentId = documentId;
-  }
   return captured;
 }
 
 export function normalizeCapturedStateMutationV1(input: unknown): CapturedStateMutationV1 {
   const record = isObjectLike(input) ? input : {};
   const mutation = normalizeKoshkoStateMutationV1(readOwnDataProperty(record, 'mutation'));
-  const observedAt = normalizeTimestamp(readOwnDataProperty(record, 'observedAt'));
-  const tabId = normalizeFrameNumber(readOwnDataProperty(record, 'tabId'));
-  const frameId = normalizeFrameNumber(readOwnDataProperty(record, 'frameId'));
-  const navigationId = normalizeIdentifier(readOwnDataProperty(record, 'navigationId'), INVALID_VALUE);
-  const frameUrl = normalizeUrlLike(readOwnDataProperty(record, 'frameUrl'));
-  const frameOrigin = normalizeFrameOrigin(readOwnDataProperty(record, 'frameOrigin'), frameUrl);
-
   const captured: CapturedStateMutationV1 = {
     mutation,
-    observedAt,
-    tabId,
-    frameId,
-    navigationId,
-    frameUrl,
-    frameOrigin,
+    ...normalizeCapturedMetadata(record),
   };
+  return captured;
+}
+
+export function normalizeCaptureContextV1(
+  input: unknown,
+  legacyFrameId?: number,
+): CaptureContextV1 {
+  const record = isObjectLike(input) ? input : undefined;
+  const id = record === undefined ? undefined : normalizeOptionalIdentifier(readOwnDataProperty(record, 'id'));
+  const kind = record === undefined ? undefined : readOwnDataProperty(record, 'kind');
+  if (id !== undefined && (kind === 'top' || kind === 'frame')) {
+    return { id, kind };
+  }
+
+  if (legacyFrameId === 0) {
+    return { id: 'top', kind: 'top' };
+  }
+  return { id: `frame:${legacyFrameId ?? -1}`, kind: 'frame' };
+}
+
+function normalizeCapturedMetadata(record: object): CapturedMetadataV1 {
+  const frameId = normalizeOptionalFrameNumber(readOwnDataProperty(record, 'frameId'));
+  const frameUrl = normalizeUrlLike(readOwnDataProperty(record, 'frameUrl'));
+  const metadata: CapturedMetadataV1 = {
+    observedAt: normalizeTimestamp(readOwnDataProperty(record, 'observedAt')),
+    captureContext: normalizeCaptureContextV1(
+      readOwnDataProperty(record, 'captureContext'),
+      frameId,
+    ),
+    navigationId: normalizeIdentifier(readOwnDataProperty(record, 'navigationId'), INVALID_VALUE),
+    frameUrl,
+    frameOrigin: normalizeFrameOrigin(readOwnDataProperty(record, 'frameOrigin'), frameUrl),
+  };
+
+  const tabId = normalizeOptionalFrameNumber(readOwnDataProperty(record, 'tabId'));
+  if (tabId !== undefined) {
+    metadata.tabId = tabId;
+  }
+  if (frameId !== undefined) {
+    metadata.frameId = frameId;
+  }
 
   const documentId = normalizeOptionalIdentifier(readOwnDataProperty(record, 'documentId'));
   if (documentId !== undefined) {
-    captured.documentId = documentId;
+    metadata.documentId = documentId;
   }
 
-  return captured;
+  return metadata;
 }
 
 export function createKoshkoWindowMessageV1(signal: KoshkoSignalV1): KoshkoWindowMessageV1 {
@@ -826,9 +824,9 @@ function normalizeTimestamp(input: unknown): number {
   return Number.isFinite(parsed) ? parsed : Date.now();
 }
 
-function normalizeFrameNumber(input: unknown): number {
+function normalizeOptionalFrameNumber(input: unknown): number | undefined {
   const parsed = parsePrimitiveNumber(input);
-  return Number.isFinite(parsed) ? Math.trunc(parsed) : -1;
+  return Number.isFinite(parsed) ? Math.trunc(parsed) : undefined;
 }
 
 function normalizeUrlLike(input: unknown): string {
