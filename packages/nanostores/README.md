@@ -28,7 +28,8 @@ Install all three in the same command because emitter and protocol are not yet
 available from a registry. The application imports only
 `@koshko/nanostores`; the other packages satisfy its transitive dependencies.
 
-After registry publication, the installation becomes:
+After registry publication, and only once all three packages are available
+from npm, the installation becomes:
 
 ```bash
 npm install --save-dev @koshko/nanostores

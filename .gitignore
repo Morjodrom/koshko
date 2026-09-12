@@ -8,3 +8,4 @@ coverage/
 **/dist/
 **/coverage/
 artifacts/
+.idea/

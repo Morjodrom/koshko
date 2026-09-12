@@ -1,9 +1,29 @@
 {
   "name": "@koshko/nanostores",
   "version": "0.1.0",
-  "private": true,
   "type": "module",
+  "description": "Nano Stores development adapter for Koshko Inspector.",
+  "keywords": [
+    "koshko",
+    "nanostores",
+    "adapter",
+    "browser-extension",
+    "devtools"
+  ],
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Morjodrom/koshko.git",
+    "directory": "packages/nanostores"
+  },
+  "homepage": "https://github.com/Morjodrom/koshko#readme",
+  "bugs": {
+    "url": "https://github.com/Morjodrom/koshko/issues"
+  },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
+  },
   "sideEffects": false,
   "main": "./dist/index.js",
   "module": "./dist/index.js",

@@ -140,6 +140,39 @@ describe('protocol normalization', () => {
     expect((normalized as Record<string, Record<string, unknown>>).error).not.toHaveProperty('dangerous');
   });
 
+  it('does not invoke user-defined Error stack getters', () => {
+    const error = new Error('outer');
+    let wasRead = false;
+    Object.defineProperty(error, 'stack', {
+      get() {
+        wasRead = true;
+        throw new Error('must not run');
+      },
+    });
+
+    const normalized = normalizeJsonValue(error);
+
+    expect(wasRead).toBe(false);
+    expect(normalized).toMatchObject({ name: 'Error', message: 'outer' });
+  });
+
+  it('does not invoke proxy-wrapped Error stack getters', () => {
+    const error = new Error('outer');
+    let wasApplied = false;
+    const stackGetter = new Proxy(() => 'unsafe stack', {
+      apply() {
+        wasApplied = true;
+        throw new Error('must not run');
+      },
+    });
+    Object.defineProperty(error, 'stack', { get: stackGetter });
+
+    const normalized = normalizeJsonValue(error);
+
+    expect(wasApplied).toBe(false);
+    expect(normalized).toMatchObject({ name: 'Error', message: 'outer' });
+  });
+
   it('normalizes error payloads and captured metadata defensively', () => {
     const cause = new Error('inner');
     const error = new Error('outer', { cause });

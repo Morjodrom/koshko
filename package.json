@@ -1,6 +1,10 @@
 {
   "name": "koshko-inspector-prototype",
   "private": true,
+  "engines": {
+    "node": "^22.11 || ^24 || >=26",
+    "npm": ">=10.9.0"
+  },
   "workspaces": [
     "apps/*",
     "packages/*",
@@ -10,13 +14,19 @@
     "dev:extension": "npm run build:packages && npm run dev --workspace=@koshko/extension",
     "dev:demo": "npm run build:packages && npm run dev --workspace=@koshko/neutral-demo",
     "build:packages": "npm run build --workspace=@koshko/protocol && npm run build --workspace=@koshko/emitter && npm run build --workspace=@koshko/nanostores",
+    "build:apps": "npm run build --workspace=@koshko/neutral-demo && npm run build --workspace=@koshko/extension",
     "pack:packages": "npm run build:packages && mkdir -p artifacts && npm pack --workspace=@koshko/protocol --workspace=@koshko/emitter --workspace=@koshko/nanostores --pack-destination artifacts",
+    "smoke:packages": "node scripts/smoke-packages.mjs",
+    "changeset": "changeset",
+    "version:packages": "changeset version",
+    "release:packages": "npm run build:packages && changeset publish",
     "prepare": "npm run build:packages",
     "test": "npm run build:packages && npm run test --workspaces --if-present",
     "typecheck": "npm run build:packages && npm run typecheck --workspaces --if-present"
   },
   "devDependencies": {
     "@types/chrome": "^0.0.289",
+    "@changesets/cli": "^3.0.2",
     "@testing-library/react": "^16.3.2",
     "@vitejs/plugin-react": "^4.4.1",
     "@types/react": "^19.2.2",

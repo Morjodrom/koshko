@@ -64,6 +64,7 @@ const CIRCULAR_VALUE = '[Circular]';
 const UNDEFINED_VALUE = '[Undefined]';
 const UNSUPPORTED_VALUE = '[Unsupported]';
 const INVALID_VALUE = '[Invalid]';
+const nativeErrorStackGetter = getNativeErrorStackGetter();
 
 export function normalizeActorReference(input: unknown): ActorReference {
   const record = isObjectLike(input) ? input : {};
@@ -579,11 +580,18 @@ function normalizeErrorValue(
   for (let index = 0; index < limit; index += 1) {
     const key = keys[index];
     const descriptor = descriptors[key];
-    if (!descriptor || !Object.prototype.hasOwnProperty.call(descriptor, 'value')) {
+    if (!descriptor) {
       continue;
     }
 
-    const value = descriptor.value;
+    const value = Object.prototype.hasOwnProperty.call(descriptor, 'value')
+      ? descriptor.value
+      : key === 'stack'
+        ? readNativeErrorStack(input, descriptor)
+        : undefined;
+    if (value === undefined) {
+      continue;
+    }
     result[key] = isSensitiveKey(key)
       ? REDACTED
       : isUrlKey(key)
@@ -595,6 +603,22 @@ function normalizeErrorValue(
     result[TRUNCATED] = TRUNCATED;
   }
   return result;
+}
+
+function getNativeErrorStackGetter(): (() => unknown) | undefined {
+  const descriptor = readOwnPropertyDescriptors(new Error())?.stack;
+  return descriptor?.get;
+}
+
+function readNativeErrorStack(input: object, descriptor: PropertyDescriptor): unknown {
+  if (descriptor.get === undefined || nativeErrorStackGetter === undefined) {
+    return undefined;
+  }
+  try {
+    return Reflect.apply(nativeErrorStackGetter, input, []);
+  } catch {
+    return undefined;
+  }
 }
 
 function hasPrototypeInChain(input: object, expected: object): boolean {

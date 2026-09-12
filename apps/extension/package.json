@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "wxt --browser chrome",
+    "build": "wxt build --browser chrome",
     "test": "vitest run",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },

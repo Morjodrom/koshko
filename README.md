@@ -3,6 +3,9 @@
 > **Pre-release.** A local Chrome/Chromium DevTools inspector for frontend
 > application flows.
 
+The source repository is public, but the npm packages are **not published
+yet**. They are prepared for a future public release from this monorepo.
+
 Koshko captures explicit `koshko` signals, browser JavaScript errors, and
 optional state mutations from an inspected page and permitted frames. Use it to
 debug frontend flows, inspect actor-to-actor events, and review state changes
@@ -39,9 +42,23 @@ Koshko does not send AI Log content to an external service.
 | Demo | Vite, Nano Stores |
 | Tooling | tsup, Vitest, strict TypeScript |
 
+## Packages
+
+| Package | Purpose | Status |
+| --- | --- | --- |
+| `@koshko/protocol` | Public message types, validation, normalization, and state helpers. | Pre-publication |
+| `@koshko/emitter` | State-library-neutral page-side signal and state transport. | Pre-publication |
+| `@koshko/nanostores` | Optional development-only Nano Stores adapter. | Pre-publication |
+
+Until the first registry release, use the local tarball workflow in the
+[package distribution guide](docs/package-distribution.md). Do not assume
+these package names can be installed from npm yet.
+
 ## Local development
 
-Requirements: Node.js/npm and Chrome or Chromium with Developer mode.
+Requirements: Node.js/npm and Chrome or Chromium with Developer mode. The
+supported local toolchain is Node.js `^22.11 || ^24 || >=26` and npm
+`>=10.9.0` (CI currently uses Node.js 24).
 
 ```bash
 npm ci

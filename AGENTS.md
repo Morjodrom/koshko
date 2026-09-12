@@ -27,11 +27,19 @@ For a focused check, use `npm test --workspace=@koshko/protocol`.
 
 ## Versioning
 
-The canonical Koshko Inspector version is the `version` field in
-`apps/extension/package.json`; WXT exposes it in the extension manifest. Before
-every commit, increment this version, including commits that only change tests,
-documentation, or project metadata, and keep `package-lock.json` synchronized.
-Use semantic versioning when choosing the next version.
+The canonical Koshko Inspector extension version is the `version` field in
+`apps/extension/package.json`; WXT exposes it in the extension manifest. Bump
+that version only when the extension deliverable or its build behavior changes.
+Package-only, documentation, test, and repository-metadata commits do not
+require an extension version bump.
+
+The public package versions and changelogs are managed by Changesets. During
+the `0.x` phase, `@koshko/protocol`, `@koshko/emitter`, and
+`@koshko/nanostores` are released as one lockstep group. Use the root commands
+`npm run changeset`, `npm run version:packages`, and
+`npm run release:packages` for package releases. Use semantic versioning when
+choosing versions and keep `package-lock.json` synchronized with dependency
+changes.
 
 ## Coding Style & Naming Conventions
 

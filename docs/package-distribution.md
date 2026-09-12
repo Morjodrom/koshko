@@ -1,42 +1,32 @@
-# Package-chain tarball distribution
+# Package distribution lifecycle
 
-Koshko's application-side packages form this dependency chain:
+Koshko's application packages form this dependency chain:
 
 ```text
 @koshko/protocol <- @koshko/emitter <- @koshko/nanostores
 ```
 
-All three packages use the same `0.1.x` version during the initial pilot. They
-remain marked `private` to prevent accidental registry publication, but can be
-packed and installed as local tarballs.
+They use the same `0.1.x` version during the initial pilot. The repository is
+prepared for public npm distribution, but the packages are not published yet.
+Registry ownership, authentication, and trusted-publisher setup are manual
+account operations.
 
-## Build and inspect
+## Local build, pack, and smoke test
 
-From the repository root, build the packages in dependency order:
+Use Node.js `^22.11 || ^24 || >=26` with npm `>=10.9.0`; the repository CI
+currently runs on Node.js 24. These versions are required by the Changesets
+tooling as well as the package release commands.
+
+From the repository root:
 
 ```bash
+npm ci
 npm run build:packages
-```
-
-The standard `npm ci`, root development, test, and type-check commands also
-build the chain first, so a clean checkout never relies on stale or missing
-`dist/` output.
-
-Create all three tarballs under the ignored `artifacts/` directory:
-
-```bash
 npm run pack:packages
+npm run smoke:packages
 ```
 
-The initial artifacts are:
-
-```text
-artifacts/koshko-protocol-0.1.0.tgz
-artifacts/koshko-emitter-0.1.0.tgz
-artifacts/koshko-nanostores-0.1.0.tgz
-```
-
-Before sharing them, inspect each package without writing a tarball:
+Inspect package contents without writing a tarball:
 
 ```bash
 npm pack --dry-run --workspace=@koshko/protocol
@@ -44,16 +34,12 @@ npm pack --dry-run --workspace=@koshko/emitter
 npm pack --dry-run --workspace=@koshko/nanostores
 ```
 
-Each package should contain its `dist/` output, package manifest, and README.
-It must not contain TypeScript source, tests, installed dependency files, or
-generated coverage. Development dependency metadata may remain in
-`package.json`; npm does not install it for tarball consumers.
+The generated artifacts are written to ignored `artifacts/`. Each package
+should contain only its manifest, README, and compiled `dist/` output. The
+smoke test installs all three tarballs in an isolated temporary project and
+exercises the public ESM entry points.
 
-## Install the tarball chain
-
-Until the packages exist in a registry, consumers must install all three
-artifacts in one command so npm can satisfy the unpublished transitive
-dependencies locally:
+Until publication, consumers must install all three artifacts together:
 
 ```bash
 npm install --save-dev \
@@ -62,16 +48,45 @@ npm install --save-dev \
   ./artifacts/koshko-nanostores-0.1.0.tgz
 ```
 
-The application then follows the development-only dynamic import described in
-[`packages/nanostores/README.md`](../packages/nanostores/README.md).
+## Initial manual bootstrap
 
-## Later registry publication
+The first publication cannot be completed by repository automation. An owner
+must confirm control of the `@koshko` npm scope, authenticate to npm, satisfy
+2FA, and publish in dependency order:
 
-When registry publication is approved:
+```bash
+npm login
+npm whoami
+npm publish --workspace=@koshko/protocol --access public
+npm publish --workspace=@koshko/emitter --access public
+npm publish --workspace=@koshko/nanostores --access public
+```
 
-1. Remove `private` from the three package manifests.
-2. Configure registry authentication and scoped-package access.
-3. Publish in dependency order: protocol, emitter, then Nanostores.
+Run the local checks above first. This manual bootstrap is the only step that
+requires npm account access.
+
+## Trusted publishing and Changesets
+
+After the first versions exist, configure the repository's `publish.yml` as an
+npm trusted publisher for each package. The workflow uses GitHub OIDC and no
+long-lived npm token; it remains unusable until trusted publishers have been
+configured.
+
+Manage subsequent package releases with Changesets:
+
+```bash
+npm run changeset
+npm run version:packages
+npm run release:packages
+```
+
+During `0.x`, the three packages are a fixed lockstep group. A release
+changeset versions and publishes protocol, emitter, and the Nano Stores
+adapter together, preserving their dependency chain.
+
+The guarded workflow is manual-dispatch only, must run from `main`, and asks
+for explicit confirmation before publishing. It reruns the required checks
+before invoking the release command.
 
 Once all three versions are in the registry, consumers need only:
 
