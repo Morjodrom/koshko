@@ -9,6 +9,7 @@ import {
   type JsonValue,
   type KoshkoErrorV1,
 } from '@koshko/protocol';
+import type { CapturedPostMessage } from '../post-message';
 
 export interface KoshkoTimelineActor {
   key: string;
@@ -16,7 +17,7 @@ export interface KoshkoTimelineActor {
 }
 
 export type KoshkoTimelineEntry = CapturedSignalV1 | CapturedErrorV1;
-export type KoshkoLogEntry = KoshkoTimelineEntry | CapturedStateMutationV1;
+export type KoshkoLogEntry = KoshkoTimelineEntry | CapturedStateMutationV1 | CapturedPostMessage;
 
 export interface KoshkoStateSnapshot {
   index: number;
@@ -29,6 +30,8 @@ export class KoshkoRepository {
   private readonly capturedSignals: CapturedSignalV1[] = [];
 
   private readonly capturedErrors: CapturedErrorV1[] = [];
+
+  private readonly capturedPostMessages: CapturedPostMessage[] = [];
 
   private readonly capturedLog: KoshkoLogEntry[] = [];
 
@@ -138,6 +141,8 @@ export class KoshkoRepository {
       this.capturedSignals.push(captured);
     } else if (isCapturedError(captured)) {
       this.capturedErrors.push(captured);
+    } else if (isCapturedPostMessage(captured)) {
+      this.capturedPostMessages.push(captured);
     } else {
       const nextState = applyStateMutationPatch(this.state, captured.mutation.patch);
       if (nextState !== this.state) {
@@ -164,6 +169,7 @@ export class KoshkoRepository {
   private reset(): void {
     this.capturedSignals.length = 0;
     this.capturedErrors.length = 0;
+    this.capturedPostMessages.length = 0;
     this.capturedLog.length = 0;
     this.displaySignals = [];
     this.displayTimelineEntries = [];
@@ -191,7 +197,11 @@ export class KoshkoRepository {
   }
 
   exportJsonl(): string {
-    const entries = this.getTimelineEntries();
+    const entries = [
+      ...this.capturedSignals,
+      ...this.capturedErrors,
+      ...this.capturedPostMessages,
+    ].sort(compareCapturedLogEntries);
     const header = {
       protocol: 'koshko',
       version: 1,
@@ -199,6 +209,7 @@ export class KoshkoRepository {
       count: entries.length,
       signalCount: this.capturedSignals.length,
       errorCount: this.capturedErrors.length,
+      postMessageCount: this.capturedPostMessages.length,
       exportedAt: new Date().toISOString(),
     };
 
@@ -330,6 +341,14 @@ function getLogEntryMetadata(entry: KoshkoLogEntry): {
 } {
   if (isCapturedSignal(entry)) return entry.signal;
   if (isCapturedError(entry)) return entry.error;
+  if (isCapturedPostMessage(entry)) {
+    return {
+      id: entry.id,
+      producerId: 'window.post-message',
+      producerSequence: entry.sequence,
+      occurredAt: entry.observedAt,
+    };
+  }
   return entry.mutation;
 }
 
@@ -341,6 +360,12 @@ export function isCapturedSignal(
 
 export function isCapturedError(captured: KoshkoLogEntry): captured is CapturedErrorV1 {
   return 'error' in captured;
+}
+
+export function isCapturedPostMessage(
+  captured: KoshkoLogEntry,
+): captured is CapturedPostMessage {
+  return 'kind' in captured && captured.kind === 'post-message';
 }
 
 export function getErrorDisplayMessage(error: KoshkoErrorV1): string {
@@ -356,9 +381,10 @@ export function getErrorDisplayMessage(error: KoshkoErrorV1): string {
   return error.name;
 }
 
-function getCapturedEntryType(entry: KoshkoLogEntry): 'error' | 'signal' | 'state' {
+function getCapturedEntryType(entry: KoshkoLogEntry): 'error' | 'post-message' | 'signal' | 'state' {
   if (isCapturedSignal(entry)) return 'signal';
   if (isCapturedError(entry)) return 'error';
+  if (isCapturedPostMessage(entry)) return 'post-message';
   return 'state';
 }
 

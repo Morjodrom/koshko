@@ -86,6 +86,45 @@ describe('PanelConnection', () => {
     expect(port.messages).toContainEqual({ type: PANEL_MESSAGE_HEARTBEAT });
   });
 
+  it('forwards only valid postMessage captures', () => {
+    vi.useFakeTimers();
+    const port = new FakePort();
+    const connection = new PanelConnection(() => port);
+    const received = vi.fn();
+    connection.subscribe(received);
+    port.emit({ type: PANEL_MESSAGE_READY });
+    const captured = {
+      kind: 'post-message',
+      id: 'message-1',
+      sequence: 1,
+      observedAt: 10,
+      origin: 'https://sender.example.test',
+      source: 'parent',
+      data: { ready: true, token: 'secret' },
+      tabId: 17,
+      frameId: 2,
+      documentId: 'document-1',
+      navigationId: 'navigation-1',
+      frameUrl: 'https://frame.example.test/path',
+      frameOrigin: 'https://frame.example.test',
+    };
+
+    port.emit({ type: 'koshko:capture', kind: 'post-message', captured });
+    port.emit({
+      type: 'koshko:capture',
+      kind: 'post-message',
+      captured: { ...captured, source: 'invalid' },
+    });
+
+    expect(received).toHaveBeenCalledOnce();
+    expect(received).toHaveBeenCalledWith({
+      type: 'koshko:capture',
+      kind: 'post-message',
+      captured: { ...captured, data: { ready: true, token: '[Redacted]' } },
+    });
+    connection.dispose();
+  });
+
   it('retries a missing ready acknowledgement using the capped backoff sequence', () => {
     vi.useFakeTimers();
     const ports = Array.from({ length: 7 }, () => new FakePort());

@@ -3,6 +3,7 @@ import {
   normalizeCapturedErrorV1,
   normalizeCapturedStateMutationV1,
 } from '@koshko/protocol';
+import { normalizeCapturedPostMessage } from './post-message';
 import {
   PANEL_MESSAGE_CAPTURE,
   PANEL_MESSAGE_ACTIVATE_ORIGIN,
@@ -99,7 +100,18 @@ async function routeCaptureMessage(message: CaptureTransportMessage, sender: chr
   };
 
   let payload: PanelCaptureMessage;
-  if (message.kind === 'signal') {
+  if (message.kind === 'post-message') {
+    const captured = normalizeCapturedPostMessage({
+      ...message,
+      ...metadata,
+    });
+    if (!captured) return;
+    payload = {
+      type: PANEL_MESSAGE_CAPTURE,
+      kind: 'post-message',
+      captured,
+    };
+  } else if (message.kind === 'signal') {
     payload = {
       type: PANEL_MESSAGE_CAPTURE,
       kind: 'signal',

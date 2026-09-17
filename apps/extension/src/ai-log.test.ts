@@ -5,6 +5,7 @@ import type {
 } from '@koshko/protocol';
 import { describe, expect, it } from 'vitest';
 import { formatAiLog, type AiLogBudget } from './ai-log';
+import type { CapturedPostMessage } from './post-message';
 
 function signal(
   id: string,
@@ -90,6 +91,29 @@ function error(
     navigationId: 'navigation-1',
     frameUrl: 'https://demo.example.test/frame',
     frameOrigin: 'https://demo.example.test',
+  };
+}
+
+function postMessage(
+  id: string,
+  observedAt: number,
+  overrides: Partial<CapturedPostMessage> = {},
+): CapturedPostMessage {
+  return {
+    kind: 'post-message',
+    id,
+    sequence: observedAt,
+    observedAt,
+    origin: 'https://sender.example.test',
+    source: 'parent',
+    data: { action: 'checkout.ready' },
+    tabId: 17,
+    frameId: 0,
+    documentId: 'document-1',
+    navigationId: 'navigation-1',
+    frameUrl: 'https://demo.example.test/checkout',
+    frameOrigin: 'https://demo.example.test',
+    ...overrides,
   };
 }
 
@@ -208,6 +232,28 @@ describe('formatAiLog', () => {
       producers: { p2: 'browser-console:frame-1' },
     });
     expect(result.includedAnchorCount).toBe(1);
+  });
+
+  it('emits postMessages as compact frame-scoped evidence', () => {
+    const result = formatAiLog({
+      entries: [postMessage('message-1', 1_005)],
+      state: {},
+      budget: 'full',
+    });
+    const records = dataRecords(result.text);
+
+    expect(records.find((record) => record.kind === 'post-message')).toMatchObject({
+      kind: 'post-message',
+      e: 'e1',
+      t: 0,
+      origin: 'https://sender.example.test',
+      source: 'parent',
+      data: { action: 'checkout.ready' },
+      frame: expect.any(String),
+      producer: expect.any(String),
+      seq: 1005,
+    });
+    expect(result.includedEntryCount).toBe(1);
   });
 
   it('keeps every bounded preset within its conservative token budget', () => {

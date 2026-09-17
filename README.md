@@ -113,8 +113,14 @@ are written to ignored `artifacts/`; see
 
 ## Scope
 
-Koshko reads only explicit `koshko` messages, selected JavaScript failures, and
-state mutations that the application emits or registers. It does not record the
-DOM, capture network traffic, replay actions, infer application semantics, or
-upload captured data. Keep instrumentation behind a compile-time development
-flag so it is excluded from production bundles.
+Koshko reads explicit `koshko` messages, selected JavaScript failures, state
+mutations, and raw `window.postMessage` traffic delivered to permitted inspected
+frames. Raw messages are shown as diagnostic evidence; Koshko does not infer
+application semantics from them. It does not record the DOM, capture network
+traffic, replay actions, or upload captured data. Keep instrumentation behind a
+compile-time development flag so it is excluded from production bundles.
+
+Raw message payloads can contain private application data. Koshko applies
+bounded serialization and sensitive-key redaction before display, AI copy, or
+export, but applications should still avoid placing credentials or secrets in
+browser messages.

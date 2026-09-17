@@ -1,3 +1,5 @@
+import type { CapturedPostMessage, RawPostMessage } from '../post-message';
+
 export const STORAGE_KEY = 'koshko:origins';
 export const CONTENT_SCRIPT_ID_PREFIX = 'koshko-capture';
 export const CONTENT_SCRIPT_JS_PATH = 'content-scripts/capture.js';
@@ -38,10 +40,19 @@ export interface CaptureErrorTransportMessage {
   frameOrigin: string;
 }
 
+export interface CapturePostMessageTransportMessage extends RawPostMessage {
+  type: typeof PANEL_MESSAGE_CAPTURE;
+  kind: 'post-message';
+  navigationId: string;
+  frameUrl: string;
+  frameOrigin: string;
+}
+
 export type CaptureTransportMessage =
   | CaptureSignalTransportMessage
   | CaptureStateMutationTransportMessage
-  | CaptureErrorTransportMessage;
+  | CaptureErrorTransportMessage
+  | CapturePostMessageTransportMessage;
 
 export interface ActivateOriginMessage {
   type: typeof PANEL_MESSAGE_ACTIVATE_ORIGIN;
@@ -93,10 +104,17 @@ export interface PanelErrorCaptureMessage {
   captured: import('@koshko/protocol').CapturedErrorV1;
 }
 
+export interface PanelPostMessageCaptureMessage {
+  type: typeof PANEL_MESSAGE_CAPTURE;
+  kind: 'post-message';
+  captured: CapturedPostMessage;
+}
+
 export type PanelCaptureMessage =
   | PanelSignalCaptureMessage
   | PanelStateMutationCaptureMessage
-  | PanelErrorCaptureMessage;
+  | PanelErrorCaptureMessage
+  | PanelPostMessageCaptureMessage;
 
 export function parseTabId(value: unknown): number | null {
   if (typeof value !== 'string' || !/^\d+$/.test(value)) return null;

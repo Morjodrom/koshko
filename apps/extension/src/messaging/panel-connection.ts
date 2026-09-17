@@ -4,6 +4,7 @@ import {
   PANEL_MESSAGE_HEARTBEAT,
   PANEL_MESSAGE_READY,
 } from './messages';
+import { normalizeCapturedPostMessage } from '../post-message';
 
 export const PANEL_HEARTBEAT_INTERVAL_MS = 20_000;
 export const PANEL_READY_TIMEOUT_MS = 5_000;
@@ -101,8 +102,10 @@ export class PanelConnection implements ManagedPanelConnection {
         this.ready();
         return;
       }
-      if (this.status !== 'connected' || !isPanelCaptureMessage(message)) return;
-      this.messageListeners.forEach((listener) => listener(message));
+      if (this.status !== 'connected') return;
+      const captureMessage = parsePanelCaptureMessage(message);
+      if (!captureMessage) return;
+      this.messageListeners.forEach((listener) => listener(captureMessage));
     };
     const onDisconnect = (): void => this.fail(port);
     this.portListeners.set(port, { onMessage, onDisconnect });
@@ -181,20 +184,32 @@ export class PanelConnection implements ManagedPanelConnection {
   }
 }
 
-function isPanelCaptureMessage(message: unknown): message is PanelCaptureMessage {
-  if (!message || typeof message !== 'object') return false;
+function parsePanelCaptureMessage(message: unknown): PanelCaptureMessage | undefined {
+  if (!message || typeof message !== 'object') return undefined;
   const value = message as { type?: unknown; kind?: unknown; captured?: unknown };
   if (
     value.type !== PANEL_MESSAGE_CAPTURE
-    || (value.kind !== 'signal' && value.kind !== 'state-mutation' && value.kind !== 'error')
-  ) return false;
-  if (!value.captured || typeof value.captured !== 'object') return false;
+    || (value.kind !== 'signal' && value.kind !== 'state-mutation' && value.kind !== 'error' && value.kind !== 'post-message')
+  ) return undefined;
+  if (!value.captured || typeof value.captured !== 'object') return undefined;
   const captured = value.captured as { signal?: unknown; mutation?: unknown; error?: unknown };
   if (value.kind === 'signal') {
-    return Boolean(captured.signal && typeof captured.signal === 'object');
+    return captured.signal && typeof captured.signal === 'object'
+      ? message as PanelCaptureMessage
+      : undefined;
   }
   if (value.kind === 'error') {
-    return Boolean(captured.error && typeof captured.error === 'object');
+    return captured.error && typeof captured.error === 'object'
+      ? message as PanelCaptureMessage
+      : undefined;
   }
-  return Boolean(captured.mutation && typeof captured.mutation === 'object');
+  if (value.kind === 'post-message') {
+    const normalized = normalizeCapturedPostMessage(value.captured);
+    return normalized === undefined
+      ? undefined
+      : { type: PANEL_MESSAGE_CAPTURE, kind: 'post-message', captured: normalized };
+  }
+  return captured.mutation && typeof captured.mutation === 'object'
+    ? message as PanelCaptureMessage
+    : undefined;
 }

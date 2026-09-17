@@ -19,6 +19,7 @@ import {
   getErrorDisplayMessage,
   getActorColumns,
   isCapturedError,
+  isCapturedPostMessage,
   isCapturedSignal,
   type KoshkoLogEntry,
   type KoshkoStateSnapshot,
@@ -93,7 +94,7 @@ export function PanelApp({
     () => new Set(getActorColumns(repository.getDisplayLog()).map((actor) => actor.key)),
   );
   const [selectedLogTypes, setSelectedLogTypes] = useState<ReadonlySet<LogEntryType>>(
-    new Set(['signal', 'error']),
+    new Set(['signal', 'error', 'post-message']),
   );
   const [aiLogBudget, setAiLogBudget] = useState<AiLogBudget>('16k');
   const [expandedEntryIds, setExpandedEntryIds] = useState<
@@ -300,7 +301,7 @@ export function PanelApp({
           <BrandLockup compact />
           <h1>Tab {tabId}</h1>
           <p className="muted" data-testid="capture-status">
-            {timelineEntries.length} event{timelineEntries.length === 1 ? '' : 's'} captured
+            {displayLog.length} entr{displayLog.length === 1 ? 'y' : 'ies'} captured
             {paused ? ` · paused · +${unreadCount} unread` : ''}
           </p>
         </div>
@@ -732,7 +733,7 @@ function GlobalState({
   );
 }
 
-type LogEntryType = 'signal' | 'error' | 'state';
+type LogEntryType = 'signal' | 'error' | 'state' | 'post-message';
 
 function Log({
   entries,
@@ -756,7 +757,7 @@ function Log({
   onTypeToggle: (type: LogEntryType) => void;
 }): ReactElement {
   const emptyMessage = capturedEntryCount === 0
-    ? ['No log entries yet.', 'Captured signals, browser errors, and state mutations will appear here.']
+    ? ['No log entries yet.', 'Captured signals, browser errors, state mutations, and postMessages will appear here.']
     : ['No log entries match the current filters.', 'Adjust the search or filters to show captured entries.'];
 
   return (
@@ -777,6 +778,7 @@ function Log({
           <label><input type="checkbox" checked={selectedTypes.has('signal')} onChange={() => onTypeToggle('signal')} /> Signal</label>
           <label><input type="checkbox" checked={selectedTypes.has('error')} onChange={() => onTypeToggle('error')} /> Error</label>
           <label><input type="checkbox" checked={selectedTypes.has('state')} onChange={() => onTypeToggle('state')} /> State</label>
+          <label><input type="checkbox" checked={selectedTypes.has('post-message')} onChange={() => onTypeToggle('post-message')} /> Message</label>
         </fieldset>
         <fieldset className="log-filter-group">
           <legend>Actors</legend>
@@ -800,10 +802,17 @@ function Log({
         </div>
       ) : entries.map((entry, index) => {
         const entryType = getLogEntryType(entry);
-        const type = entryType === 'signal' ? 'Signal' : entryType === 'error' ? 'Error' : 'State';
+        const type = entryType === 'signal'
+          ? 'Signal'
+          : entryType === 'error'
+            ? 'Error'
+            : entryType === 'post-message' ? 'PostMessage' : 'State';
         const metadata = getLogEntryMetadata(entry);
         const source = getLogEntrySource(entry);
         const payload = getLogEntryPayload(entry);
+        const postMessageContext = isCapturedPostMessage(entry)
+          ? `${entry.origin || '(opaque origin)'} · ${entry.source}`
+          : undefined;
         return (
         <details
           className={`log-item ${entryType}`}
@@ -822,6 +831,7 @@ function Log({
                 ? <span className="log-entry-machine-name"> · {entry.error.name}</span>
                 : null}
               {source === undefined ? null : <span className="log-entry-source"> · {formatActor(source)}</span>}
+              {postMessageContext === undefined ? null : <span className="log-entry-source"> · {postMessageContext}</span>}
             </span>
             <span className="muted">
               {formatDateTime(metadata.occurredAt)}
@@ -838,6 +848,7 @@ function Log({
 }
 
 function matchesSelectedActor(entry: KoshkoLogEntry, selectedActorKeys: ReadonlySet<string>): boolean {
+  if (isCapturedPostMessage(entry)) return true;
   if (isCapturedSignal(entry)) {
     return selectedActorKeys.has(actorKey(entry.signal.source))
       || (entry.signal.target !== undefined && selectedActorKeys.has(actorKey(entry.signal.target)));
@@ -847,7 +858,8 @@ function matchesSelectedActor(entry: KoshkoLogEntry, selectedActorKeys: Readonly
 
 function getLogEntryType(entry: KoshkoLogEntry): LogEntryType {
   if (isCapturedSignal(entry)) return 'signal';
-  return isCapturedError(entry) ? 'error' : 'state';
+  if (isCapturedError(entry)) return 'error';
+  return isCapturedPostMessage(entry) ? 'post-message' : 'state';
 }
 
 function getLogEntryMetadata(entry: KoshkoLogEntry): {
@@ -856,12 +868,16 @@ function getLogEntryMetadata(entry: KoshkoLogEntry): {
 } {
   if (isCapturedSignal(entry)) return entry.signal;
   if (isCapturedError(entry)) return entry.error;
+  if (isCapturedPostMessage(entry)) {
+    return { id: entry.id, occurredAt: entry.observedAt };
+  }
   return entry.mutation;
 }
 
 function getLogEntryName(entry: KoshkoLogEntry): string {
   if (isCapturedSignal(entry)) return entry.signal.name;
   if (isCapturedError(entry)) return getErrorDisplayMessage(entry.error);
+  if (isCapturedPostMessage(entry)) return 'window.postMessage';
   return entry.mutation.label ?? 'state mutation';
 }
 
@@ -874,6 +890,13 @@ function getLogEntrySource(entry: KoshkoLogEntry) {
 function getLogEntryPayload(entry: KoshkoLogEntry) {
   if (isCapturedSignal(entry)) return entry.signal.details;
   if (isCapturedError(entry)) return entry.error.payload;
+  if (isCapturedPostMessage(entry)) {
+    return {
+      origin: entry.origin,
+      source: entry.source,
+      data: entry.data,
+    };
+  }
   return entry.mutation.patch;
 }
 

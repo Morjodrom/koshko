@@ -33,7 +33,14 @@ describe('window capture', () => {
       },
     });
 
-    expect(sendMessage).toHaveBeenCalledWith(expect.objectContaining({
+    expect(sendMessage).toHaveBeenNthCalledWith(1, expect.objectContaining({
+      type: PANEL_MESSAGE_CAPTURE,
+      kind: 'post-message',
+      sequence: 1,
+      source: 'self',
+      data: expect.objectContaining({ type: 'signal' }),
+    }));
+    expect(sendMessage).toHaveBeenNthCalledWith(2, expect.objectContaining({
       type: PANEL_MESSAGE_CAPTURE,
       kind: 'signal',
       signal: expect.objectContaining({ id: 'signal-1', name: 'host.ready' }),
@@ -42,6 +49,44 @@ describe('window capture', () => {
       frameUrl: location.href,
       frameOrigin: location.origin,
     }));
+  });
+
+  it('captures origin, source classification, unique ids, and monotonic sequence', () => {
+    const sendMessage = vi.fn(() => Promise.resolve());
+    vi.stubGlobal('chrome', { runtime: { sendMessage } });
+    cleanups.push(startCapture());
+
+    window.dispatchEvent(new MessageEvent('message', {
+      data: { action: 'parent.ready', token: 'secret' },
+      origin: 'https://parent.example.test',
+      source: {} as Window,
+    }));
+    window.dispatchEvent(new MessageEvent('message', {
+      data: new Date('2026-09-05T12:34:56.789Z'),
+      origin: 'null',
+      source: null,
+    }));
+
+    expect(sendMessage).toHaveBeenNthCalledWith(1, expect.objectContaining({
+      kind: 'post-message',
+      id: expect.any(String),
+      sequence: 1,
+      origin: 'https://parent.example.test',
+      source: 'other',
+      data: { action: 'parent.ready', token: '[Redacted]' },
+    }));
+    expect(sendMessage).toHaveBeenNthCalledWith(2, expect.objectContaining({
+      kind: 'post-message',
+      id: expect.any(String),
+      sequence: 2,
+      origin: 'null',
+      source: 'none',
+      data: { $type: 'date', value: '2026-09-05T12:34:56.789Z' },
+    }));
+    const ids = sendMessage.mock.calls.map(
+      (call) => (call as unknown as [{ id: string }])[0].id,
+    );
+    expect(ids[0]).not.toBe(ids[1]);
   });
 
   it('forwards normalized and redacted state mutations with capture metadata', () => {
@@ -117,7 +162,7 @@ describe('window capture', () => {
     }));
   });
 
-  it('ignores malformed, unsupported, and non-self window messages', () => {
+  it('forwards malformed and non-self messages as raw captures without semantic routing', () => {
     const sendMessage = vi.fn(() => Promise.resolve());
     vi.stubGlobal('chrome', { runtime: { sendMessage } });
     cleanups.push(startCapture());
@@ -129,7 +174,10 @@ describe('window capture', () => {
       source: {} as Window,
     }));
 
-    expect(sendMessage).not.toHaveBeenCalled();
+    expect(sendMessage).toHaveBeenCalledTimes(3);
+    expect(sendMessage).toHaveBeenNthCalledWith(1, expect.objectContaining({ kind: 'post-message' }));
+    expect(sendMessage).toHaveBeenNthCalledWith(2, expect.objectContaining({ kind: 'post-message' }));
+    expect(sendMessage).toHaveBeenNthCalledWith(3, expect.objectContaining({ kind: 'post-message' }));
   });
 
   it('installs only one listener when capture is activated repeatedly', () => {
@@ -139,7 +187,9 @@ describe('window capture', () => {
 
     dispatchSelfMessage(validSignalMessage());
 
-    expect(sendMessage).toHaveBeenCalledTimes(1);
+    expect(sendMessage).toHaveBeenCalledTimes(2);
+    expect(sendMessage).toHaveBeenNthCalledWith(1, expect.objectContaining({ kind: 'post-message' }));
+    expect(sendMessage).toHaveBeenNthCalledWith(2, expect.objectContaining({ kind: 'signal' }));
   });
 });
 

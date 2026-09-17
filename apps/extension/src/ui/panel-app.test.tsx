@@ -13,6 +13,7 @@ import type {
   CapturedStateMutationV1,
 } from '@koshko/protocol';
 import type { PanelCaptureMessage } from '../messaging/messages';
+import type { CapturedPostMessage } from '../post-message';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { PanelApp } from './panel-app';
 import type { ManagedPanelConnection, PanelConnectionStatus } from '../messaging/panel-connection';
@@ -57,6 +58,12 @@ class FakePanelConnection implements ManagedPanelConnection {
   emitStateMutation(captured: CapturedStateMutationV1): void {
     for (const listener of this.messageListeners) {
       listener({ type: PANEL_MESSAGE_CAPTURE, kind: 'state-mutation', captured });
+    }
+  }
+
+  emitPostMessage(captured: CapturedPostMessage): void {
+    for (const listener of this.messageListeners) {
+      listener({ type: PANEL_MESSAGE_CAPTURE, kind: 'post-message', captured });
     }
   }
 
@@ -139,6 +146,24 @@ function capturedError(overrides: Partial<CapturedErrorV1> = {}): CapturedErrorV
       },
     },
     observedAt: Date.parse('2026-09-05T12:34:56.790Z'),
+    tabId: 17,
+    frameId: 0,
+    navigationId: 'navigation-1',
+    frameUrl: 'https://demo.example.test',
+    frameOrigin: 'https://demo.example.test',
+    ...overrides,
+  };
+}
+
+function capturedPostMessage(overrides: Partial<CapturedPostMessage> = {}): CapturedPostMessage {
+  return {
+    kind: 'post-message',
+    id: 'post-message-1',
+    sequence: 1,
+    observedAt: Date.parse('2026-09-05T12:34:56.790Z'),
+    origin: 'https://sender.example.test',
+    source: 'parent',
+    data: { action: 'checkout.ready', token: '[Redacted]' },
     tabId: 17,
     frameId: 0,
     navigationId: 'navigation-1',
@@ -610,6 +635,45 @@ describe('PanelApp', () => {
     expect(repository.exportJsonl()).toContain('"errorCount":1');
   });
 
+  it('shows postMessages as searchable actor-independent log, AI, and export entries', () => {
+    const { port, repository } = mountPanel();
+
+    act(() => {
+      port.emitCapture(captured());
+      port.emitPostMessage(capturedPostMessage());
+    });
+
+    expect(screen.getByTestId('capture-status').textContent).toContain('2 entries captured');
+    expect(screen.getByTestId('timeline').textContent).not.toContain('checkout.ready');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Log' }));
+    expect((screen.getByRole('checkbox', { name: 'Message' }) as HTMLInputElement).checked).toBe(true);
+    const row = document.querySelector<HTMLElement>('[data-log-entry-type="post-message"]')!;
+    expect(row.classList).toContain('post-message');
+    expect(row.textContent).toContain('PostMessage');
+    expect(row.textContent).toContain('window.postMessage');
+    expect(row.textContent).toContain('https://sender.example.test');
+    expect(row.textContent).toContain('parent');
+    expect(row.textContent).toContain('checkout.ready');
+    expect(row.textContent).toContain('[Redacted]');
+
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Host application' }));
+    expect(document.querySelectorAll('[data-log-entry-type="post-message"]')).toHaveLength(1);
+    fireEvent.change(screen.getByRole('searchbox', { name: 'Search log' }), {
+      target: { value: 'sender.example.test' },
+    });
+    expect(document.querySelectorAll('[data-log-entry-type="post-message"]')).toHaveLength(1);
+
+    fireEvent.click(screen.getByRole('button', { name: 'AI Log' }));
+    const aiLog = screen.getByRole('textbox', { name: 'AI-ready Koshko log' }) as HTMLTextAreaElement;
+    expect(aiLog.value).toContain('"kind":"post-message"');
+    expect(aiLog.value).toContain('checkout.ready');
+
+    const exported = repository.exportJsonl();
+    expect(exported).toContain('"postMessageCount":1');
+    expect(exported).toContain('"id":"post-message-1"');
+  });
+
   it('buffers signals when paused, resumes, clears, and delegates export', () => {
     const { port, repository, downloadJsonl } = mountPanel();
 
@@ -629,7 +693,7 @@ describe('PanelApp', () => {
     );
 
     expect(screen.getByTestId('capture-status').textContent).toContain(
-      '1 event captured · paused · +1 unread',
+      '1 entry captured · paused · +1 unread',
     );
     expect(
       document.querySelectorAll('[data-signal-name="host.buffered"]'),
@@ -664,7 +728,7 @@ describe('PanelApp', () => {
       ),
     );
 
-    expect(screen.getByTestId('capture-status').textContent).toContain('0 events captured');
+    expect(screen.getByTestId('capture-status').textContent).toContain('1 entry captured');
     expect(document.querySelectorAll('[data-signal-name]').length).toBe(0);
     fireEvent.click(screen.getByRole('button', { name: 'Log' }));
     expect(screen.getByTestId('log-empty-state').textContent).toContain('No log entries match the current filters.');

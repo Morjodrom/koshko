@@ -220,7 +220,9 @@ Each browser frame has its own `window`. The emitter always emits to **its own w
 
 For a same-origin or cross-origin iframe, the extension can observe that frame only if its content script is allowed there. **Every inspected origin needs permission** in the extension Options page: grant the host origin and each child-frame origin that you want captured. Reload the tab after changing permissions. Signals from a frame without permission will not reach the Koshko panel, even if that frame emits correctly.
 
-Cross-origin application messaging remains subject to the browser's normal security model. Continue to use explicit target origins and validate incoming messages for your application's own `postMessage` protocol. Koshko's helper is independent of that protocol and should not carry private transport payloads.
+Cross-origin application messaging remains subject to the browser's normal security model. Continue to use explicit target origins and validate incoming messages for your application's own `postMessage` protocol. When Koshko has permission for a receiving frame, its Log records delivered messages as raw **PostMessage** entries in addition to any semantic Koshko entry. This observation does not validate or reconstruct the application's protocol.
+
+Raw message data is converted to bounded, tagged JSON and sensitive-looking keys are redacted before it reaches the panel, AI Log, or JSONL export. This is a diagnostic safeguard rather than a security boundary: do not place credentials or secrets in application messages.
 
 ## Extension setup and verification
 

@@ -6,11 +6,35 @@ import {
   getActorColumns,
   type KoshkoLogEntry,
 } from './repository';
+import type { CapturedPostMessage } from '../post-message';
 
 function entryID(entry: KoshkoLogEntry): string {
   if ('signal' in entry) return entry.signal.id;
   if ('error' in entry) return entry.error.id;
+  if ('kind' in entry) return entry.id;
   return entry.mutation.id;
+}
+
+function postMessage(
+  id: string,
+  observedAt: number,
+  overrides: Partial<CapturedPostMessage> = {},
+): CapturedPostMessage {
+  return {
+    kind: 'post-message',
+    id,
+    sequence: observedAt,
+    observedAt,
+    origin: 'https://sender.example.test',
+    source: 'parent',
+    data: { id },
+    tabId: 1,
+    frameId: 0,
+    navigationId: 'nav',
+    frameUrl: 'https://example.com',
+    frameOrigin: 'https://example.com',
+    ...overrides,
+  };
 }
 
 describe('koshko inspector repository', () => {
@@ -173,6 +197,36 @@ describe('koshko inspector repository', () => {
     expect(lines[1]).toContain('"id":"kept-1"');
     repo.clear();
     expect(repo.getSignals().length).toBe(0);
+  });
+
+  it('orders, buffers, resets, and exports postMessage log entries', () => {
+    const repo = new KoshkoRepository();
+
+    repo.record(postMessage('later', 20));
+    repo.record(postMessage('earlier', 10));
+
+    expect(repo.getDisplayLog().map(entryID)).toEqual(['earlier', 'later']);
+    expect(repo.getTimelineEntries()).toEqual([]);
+    expect(repo.getDisplayState()).toEqual({});
+
+    repo.setPaused(true);
+    repo.record(postMessage('buffered', 30));
+    expect(repo.getDisplayLog().map(entryID)).toEqual(['earlier', 'later']);
+    expect(repo.getUnreadCount()).toBe(1);
+    repo.setPaused(false);
+    expect(repo.getDisplayLog().map(entryID)).toEqual(['earlier', 'later', 'buffered']);
+
+    const [metadata, ...entries] = repo.exportJsonl().split('\n');
+    expect(JSON.parse(metadata)).toMatchObject({
+      count: 3,
+      signalCount: 0,
+      errorCount: 0,
+      postMessageCount: 3,
+    });
+    expect(entries.map((entry) => JSON.parse(entry).id)).toEqual(['earlier', 'later', 'buffered']);
+
+    repo.record(postMessage('next-navigation', 40, { navigationId: 'next-nav' }));
+    expect(repo.getLog().map(entryID)).toEqual(['next-navigation']);
   });
 
   it('discovers actors from displayed signals only while paused', () => {

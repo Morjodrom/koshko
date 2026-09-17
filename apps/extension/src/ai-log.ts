@@ -3,6 +3,7 @@ import {
   actorKey,
   getErrorDisplayMessage,
   isCapturedError,
+  isCapturedPostMessage,
   isCapturedSignal,
   type KoshkoLogEntry,
 } from './state/repository';
@@ -283,6 +284,15 @@ function prepareRecord(
       ...(entry.observedAt === metadata.occurredAt
         ? {}
         : { observedDelayMs: entry.observedAt - metadata.occurredAt }),
+    });
+  } else if (isCapturedPostMessage(entry)) {
+    value = compactObject({
+      ...base,
+      kind: 'post-message',
+      origin: entry.origin,
+      source: entry.source,
+      data: entry.data,
+      frame: frameAlias,
     });
   } else {
     patchPaths = entry.mutation.patch.map((operation) => operation.path);
@@ -843,7 +853,16 @@ function getEntryMetadata(entry: KoshkoLogEntry): {
   occurredAt: number;
 } {
   if (isCapturedSignal(entry)) return entry.signal;
-  return isCapturedError(entry) ? entry.error : entry.mutation;
+  if (isCapturedError(entry)) return entry.error;
+  if (isCapturedPostMessage(entry)) {
+    return {
+      id: entry.id,
+      producerId: 'window.post-message',
+      producerSequence: entry.sequence,
+      occurredAt: entry.observedAt,
+    };
+  }
+  return entry.mutation;
 }
 
 function compactObject(value: Record<string, unknown>): Record<string, unknown> {
