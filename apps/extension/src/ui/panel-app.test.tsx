@@ -23,6 +23,10 @@ import { formatDateTime, formatTime, KoshkoRepository } from '../state/repositor
 import {
   PANEL_MESSAGE_CAPTURE,
 } from '../messaging/messages';
+import {
+  EXTENSION_MESSAGE_RULES_STORAGE_KEY,
+  defaultExtensionMessageRulesConfig,
+} from '../extension-message-rules';
 
 class FakePanelConnection implements ManagedPanelConnection {
   private readonly messageListeners = new Set<
@@ -226,7 +230,10 @@ function expandGlobalState(): HTMLElement {
 }
 
 describe('PanelApp', () => {
-  afterEach(cleanup);
+  afterEach(() => {
+    cleanup();
+    vi.unstubAllGlobals();
+  });
 
   it('grants the inspected site explicitly and explains missed startup events', async () => {
     const accessController = createAccessController({
@@ -643,8 +650,12 @@ describe('PanelApp', () => {
       port.emitPostMessage(capturedPostMessage());
     });
 
-    expect(screen.getByTestId('capture-status').textContent).toContain('2 entries captured');
-    expect(screen.getByTestId('timeline').textContent).not.toContain('checkout.ready');
+    expect(screen.getByTestId('capture-status').textContent).toContain('2 entries shown');
+    expect(screen.getByTestId('timeline').textContent).toContain('demo.example.test');
+    expect(screen.getByTestId('timeline').textContent).toContain('PostMessage');
+    expect(screen.getByTestId('timeline').textContent).toContain('window.postMessage');
+    fireEvent.click(document.querySelector<HTMLElement>('[data-entry-type="post-message"]')!);
+    expect(screen.getByTestId('timeline-details').textContent).toContain('checkout.ready');
 
     fireEvent.click(screen.getByRole('button', { name: 'Log' }));
     expect((screen.getByRole('checkbox', { name: 'Message' }) as HTMLInputElement).checked).toBe(true);
@@ -674,6 +685,122 @@ describe('PanelApp', () => {
     expect(exported).toContain('"id":"post-message-1"');
   });
 
+  it('hides classified extension messages across every output until the global filter is enabled', () => {
+    const { port, repository } = mountPanel();
+
+    act(() => {
+      port.emitCapture(captured());
+      port.emitPostMessage(capturedPostMessage({
+        id: 'react-message',
+        frameId: 7,
+        iframeElementId: 'devtools-frame',
+        data: { source: 'react-devtools-content-script', hello: true },
+      }));
+      port.emitPostMessage(capturedPostMessage({
+        id: 'pixi-message',
+        sequence: 2,
+        frameId: 7,
+        iframeElementId: 'devtools-frame',
+        data: { method: 'pixi-inactive', data: '{}' },
+      }));
+      port.emitPostMessage(capturedPostMessage({
+        id: 'page-message',
+        sequence: 3,
+        data: { method: 'application-ready' },
+      }));
+    });
+
+    expect((screen.getByRole('checkbox', { name: 'Extensions' }) as HTMLInputElement).checked).toBe(false);
+    expect(screen.getByTestId('capture-status').textContent).toContain('2 entries shown · 2 extensions hidden');
+    expect(screen.getByTestId('timeline').textContent).not.toContain('#devtools-frame');
+    expect(repository.exportJsonl()).not.toContain('react-message');
+    expect(repository.exportJsonl()).not.toContain('pixi-message');
+    expect(repository.exportJsonl()).toContain('page-message');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Log' }));
+    expect(screen.getByTestId('log').textContent).not.toContain('react-devtools');
+    expect(screen.getByTestId('log').textContent).not.toContain('pixi-inactive');
+    expect(screen.getByTestId('log').textContent).toContain('application-ready');
+    fireEvent.click(screen.getByRole('button', { name: 'AI Log' }));
+    const aiLog = screen.getByRole('textbox', { name: 'AI-ready Koshko log' }) as HTMLTextAreaElement;
+    expect(aiLog.value).not.toContain('react-devtools');
+    expect(aiLog.value).not.toContain('pixi-inactive');
+    expect(aiLog.value).toContain('application-ready');
+
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Extensions' }));
+
+    expect(screen.getByTestId('capture-status').textContent).toContain('4 entries shown');
+    expect(aiLog.value).toContain('react-devtools');
+    expect(aiLog.value).toContain('pixi-inactive');
+    expect(repository.exportJsonl()).toContain('react-message');
+    expect(repository.exportJsonl()).toContain('pixi-message');
+    fireEvent.click(screen.getByRole('button', { name: 'Timeline' }));
+    expect(screen.getByTestId('timeline').textContent).toContain('#devtools-frame');
+  });
+
+  it('recomputes paused unread messages when Extensions is toggled and preserves the toggle through clear', () => {
+    const { port } = mountPanel();
+    fireEvent.click(screen.getByTestId('pause-button'));
+    act(() => {
+      port.emitPostMessage(capturedPostMessage({
+        id: 'hidden-unread',
+        data: { source: 'react-devtools-bridge' },
+      }));
+      port.emitPostMessage(capturedPostMessage({
+        id: 'page-unread',
+        sequence: 2,
+        data: { ready: true },
+      }));
+    });
+    expect(screen.getByTestId('capture-status').textContent).toContain('+1 unread');
+
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Extensions' }));
+    expect(screen.getByTestId('capture-status').textContent).toContain('+2 unread');
+    fireEvent.click(screen.getByTestId('clear-button'));
+    expect((screen.getByRole('checkbox', { name: 'Extensions' }) as HTMLInputElement).checked).toBe(true);
+  });
+
+  it('reclassifies retained messages when stored rules change', async () => {
+    let storageListener: ((
+      changes: Record<string, chrome.storage.StorageChange>,
+      areaName: string,
+    ) => void) | undefined;
+    const get = vi.fn(async () => ({
+      [EXTENSION_MESSAGE_RULES_STORAGE_KEY]: defaultExtensionMessageRulesConfig(),
+    }));
+    vi.stubGlobal('chrome', {
+      storage: {
+        local: { get },
+        onChanged: {
+          addListener: (listener: typeof storageListener) => { storageListener = listener; },
+          removeListener: vi.fn(),
+        },
+      },
+    });
+    const { port } = mountPanel();
+    await waitFor(() => expect(get).toHaveBeenCalled());
+    act(() => port.emitPostMessage(capturedPostMessage({ data: { bridge: { tool: 'custom' } } })));
+    expect(screen.getByTestId('capture-status').textContent).toContain('1 entry shown');
+
+    act(() => storageListener?.({
+      [EXTENSION_MESSAGE_RULES_STORAGE_KEY]: {
+        newValue: {
+          version: 1,
+          rules: [{
+            id: 'custom',
+            name: 'Custom Extension',
+            enabled: true,
+            path: 'bridge.tool',
+            operator: 'equals',
+            value: 'custom',
+          }],
+        },
+      },
+    }, 'local'));
+
+    expect(screen.getByTestId('capture-status').textContent).toContain('0 entries shown · 1 extensions hidden');
+  });
+
   it('buffers signals when paused, resumes, clears, and delegates export', () => {
     const { port, repository, downloadJsonl } = mountPanel();
 
@@ -693,7 +820,7 @@ describe('PanelApp', () => {
     );
 
     expect(screen.getByTestId('capture-status').textContent).toContain(
-      '1 entry captured · paused · +1 unread',
+      '1 entry shown · paused · +1 unread',
     );
     expect(
       document.querySelectorAll('[data-signal-name="host.buffered"]'),
@@ -728,7 +855,7 @@ describe('PanelApp', () => {
       ),
     );
 
-    expect(screen.getByTestId('capture-status').textContent).toContain('1 entry captured');
+    expect(screen.getByTestId('capture-status').textContent).toContain('1 entry shown');
     expect(document.querySelectorAll('[data-signal-name]').length).toBe(0);
     fireEvent.click(screen.getByRole('button', { name: 'Log' }));
     expect(screen.getByTestId('log-empty-state').textContent).toContain('No log entries match the current filters.');

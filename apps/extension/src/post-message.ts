@@ -9,6 +9,7 @@ export interface PostMessageFrameMetadata {
   navigationId: string;
   frameUrl: string;
   frameOrigin: string;
+  iframeElementId?: string;
 }
 
 /** The safe, transport-independent observation produced by the content script. */
@@ -19,6 +20,7 @@ export interface RawPostMessage {
   origin: string;
   source: PostMessageSource;
   data: JsonValue;
+  iframeElementId?: string;
 }
 
 export interface CapturedPostMessage extends PostMessageFrameMetadata {
@@ -279,6 +281,15 @@ export function normalizePostMessageData(value: unknown): JsonValue {
 
 export const serializePostMessageData = normalizePostMessageData;
 
+const MAX_IFRAME_ELEMENT_ID_LENGTH = 256;
+
+/** Normalize an iframe DOM id before it crosses the content-script boundary. */
+export function normalizeIframeElementId(value: unknown): string | undefined {
+  if (typeof value !== 'string') return undefined;
+  const normalized = sanitizeText(value).trim().slice(0, MAX_IFRAME_ELEMENT_ID_LENGTH);
+  return normalized.length > 0 ? normalized : undefined;
+}
+
 export function normalizeCapturedPostMessage(input: unknown): CapturedPostMessage | undefined {
   if (!input || typeof input !== 'object') return undefined;
   const value = input as object;
@@ -294,6 +305,7 @@ export function normalizeCapturedPostMessage(input: unknown): CapturedPostMessag
   const navigationId = ownData(value, 'navigationId');
   const frameUrl = ownData(value, 'frameUrl');
   const frameOrigin = ownData(value, 'frameOrigin');
+  const iframeElementId = ownData(value, 'iframeElementId');
   if (
     typeof source !== 'string'
     || !['self', 'parent', 'opener', 'other', 'none'].includes(source)
@@ -317,6 +329,8 @@ export function normalizeCapturedPostMessage(input: unknown): CapturedPostMessag
     || typeof origin !== 'string'
   ) return undefined;
   if (documentId !== undefined && typeof documentId !== 'string') return undefined;
+  const normalizedIframeElementId = normalizeIframeElementId(iframeElementId);
+  if (iframeElementId !== undefined && normalizedIframeElementId === undefined) return undefined;
   return {
     kind: POST_MESSAGE_KIND,
     id: sanitizeText(id),
@@ -331,5 +345,6 @@ export function normalizeCapturedPostMessage(input: unknown): CapturedPostMessag
     navigationId: sanitizeText(navigationId),
     frameUrl: sanitizeUrl(frameUrl),
     frameOrigin: sanitizeText(frameOrigin),
+    ...(normalizedIframeElementId === undefined ? {} : { iframeElementId: normalizedIframeElementId }),
   };
 }

@@ -10,6 +10,7 @@ import {
   formatTime,
   getErrorDisplayMessage,
   isCapturedError,
+  isCapturedPostMessage,
   isCapturedSignal,
   type KoshkoTimelineActor,
   type KoshkoTimelineEntry,
@@ -30,7 +31,7 @@ export type TimelineSeverity = 'debug' | 'info' | 'success' | 'warning' | 'error
 export interface TimelineEventNodeData extends Record<string, unknown> {
   kind: 'event';
   entryId: string;
-  entryType: 'signal' | 'error';
+  entryType: 'signal' | 'error' | 'post-message';
   name: string;
   machineName: string;
   severity: TimelineSeverity;
@@ -112,6 +113,75 @@ export function createTimelineLayout({
 
   for (const [entryIndex, captured] of entries.entries()) {
     const isSignal = isCapturedSignal(captured);
+    const isPostMessage = isCapturedPostMessage(captured);
+    if (isPostMessage) {
+      const frameKey = `frame::${captured.frameId}`;
+      const frameIndex = actorIndexes.get(frameKey);
+      if (frameIndex === undefined) continue;
+      const eventId = `event:${captured.id}`;
+      const selected = selectedEntryId === captured.id;
+      const directionLabel = `${captured.origin} · source ${captured.source} · ${new Date(captured.observedAt).toISOString()}`;
+      nodes.push({
+        id: eventId,
+        type: 'timelineEvent',
+        position: {
+          x: frameIndex * TIMELINE_LANE_WIDTH + (TIMELINE_LANE_WIDTH - EVENT_WIDTH) / 2,
+          y: rowTop + ROW_PADDING_TOP,
+        },
+        width: EVENT_WIDTH,
+        height: EVENT_HEIGHT,
+        draggable: false,
+        connectable: false,
+        selectable: true,
+        selected,
+        ariaLabel: directionLabel,
+        className: 'timeline-flow-event entry-post-message severity-warning',
+        data: {
+          kind: 'event',
+          entryId: captured.id,
+          entryType: 'post-message',
+          name: 'window.postMessage',
+          machineName: 'window.postMessage',
+          severity: 'warning',
+          expanded: expandedEntryIds.has(captured.id),
+          direction: 'internal',
+          directionLabel,
+          toggleDetails,
+        },
+      });
+      timestamps.push({
+        entryId: captured.id,
+        top: rowTop + ROW_PADDING_TOP,
+        time: formatTime(captured.observedAt),
+        source: `${captured.origin} · ${captured.source}`,
+        title: directionLabel,
+      });
+      rowTop += TIMELINE_ROW_HEIGHT;
+      if (expandedEntryIds.has(captured.id)) {
+        nodes.push({
+          id: `detail:${captured.id}`,
+          type: 'timelineDetail',
+          position: { x: 8, y: rowTop - DETAIL_GAP },
+          width: width - 16,
+          height: TIMELINE_DETAIL_HEIGHT,
+          draggable: false,
+          connectable: false,
+          selectable: false,
+          focusable: false,
+          className: 'timeline-flow-detail',
+          data: {
+            kind: 'detail',
+            entryId: captured.id,
+            json: JSON.stringify(captured, null, 2),
+          },
+        });
+        rowTop += TIMELINE_DETAIL_HEIGHT + DETAIL_GAP;
+      }
+      if (entryIndex < entries.length - 1) {
+        separators.push({ entryId: captured.id, top: rowTop });
+      }
+      continue;
+    }
     const metadata = isSignal ? captured.signal : captured.error;
     const entryType = isSignal ? 'signal' : 'error';
     const displayName = isSignal ? metadata.name : getErrorDisplayMessage(captured.error);

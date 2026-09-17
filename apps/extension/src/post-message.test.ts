@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   normalizeCapturedPostMessage,
+  normalizeIframeElementId,
   normalizePostMessageData,
   type CapturedPostMessage,
 } from './post-message';
@@ -82,6 +83,13 @@ describe('postMessage normalization', () => {
     })).toEqual({ $type: 'truncated', reason: 'size-limit' });
   });
 
+  it('normalizes iframe element ids and rejects invalid values', () => {
+    expect(normalizeIframeElementId('  checkout-frame  ')).toBe('checkout-frame');
+    expect(normalizeIframeElementId('')).toBeUndefined();
+    expect(normalizeIframeElementId('   ')).toBeUndefined();
+    expect(normalizeIframeElementId(42)).toBeUndefined();
+  });
+
   it('validates and sanitizes captured metadata for transport', () => {
     const message: CapturedPostMessage = {
       kind: 'post-message',
@@ -97,6 +105,7 @@ describe('postMessage normalization', () => {
       navigationId: 'nav',
       frameUrl: 'https://page.test/path?x=1',
       frameOrigin: 'https://page.test',
+      iframeElementId: '  frame-a  ',
     };
     expect(normalizeCapturedPostMessage(message)).toMatchObject({
       kind: 'post-message',
@@ -104,6 +113,7 @@ describe('postMessage normalization', () => {
       frameUrl: 'https://page.test/path',
       documentId: 'doc',
       data: { ok: true },
+      iframeElementId: 'frame-a',
     });
     expect(normalizeCapturedPostMessage({ ...message, source: 'invalid' })).toBeUndefined();
   });

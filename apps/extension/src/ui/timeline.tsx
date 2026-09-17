@@ -69,6 +69,7 @@ const EventNode = memo(function EventNode({ data }: NodeProps<TimelineNode>): Re
       >
         <span className="timeline-event-dot" aria-hidden="true" />
         {event.entryType === 'error' ? <span className="timeline-entry-kind error">Error</span> : null}
+        {event.entryType === 'post-message' ? <span className="timeline-entry-kind post-message">PostMessage</span> : null}
         <span>{event.name}</span>
       </button>
     </>
@@ -129,7 +130,7 @@ export function Timeline(props: TimelineProps): ReactElement {
       <div className="empty empty-with-icon" data-testid="empty-state">
         <Icon name="timeline" className="state-icon" />
         <p>No timeline entries yet.</p>
-        <span>Signals and browser errors from this tab will appear here.</span>
+        <span>Signals, browser errors, and page messages from this tab will appear here.</span>
       </div>
     );
   }
@@ -273,7 +274,7 @@ function ActorHeader({
       style={{ left: index * TIMELINE_LANE_WIDTH, width: TIMELINE_LANE_WIDTH }}
     >
       <span className="timeline-actor-label">{reference.label ?? reference.id}</span>
-      {instanceLabel ? (
+      {instanceLabel && actor.kind !== 'frame' ? (
         <span className="timeline-instance-badge" data-testid="actor-instance-badge">
           {instanceLabel}
         </span>

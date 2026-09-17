@@ -18,6 +18,7 @@ import {
   formatDateTime,
   getErrorDisplayMessage,
   getActorColumns,
+  getTimelineActors,
   isCapturedError,
   isCapturedPostMessage,
   isCapturedSignal,
@@ -40,6 +41,10 @@ import { BrandLockup, Icon } from './brand';
 import { GlobalStateViewer } from './global-state-viewer';
 import type { ManagedPanelConnection, PanelConnectionStatus } from '../messaging/panel-connection';
 import { Timeline } from './timeline';
+import {
+  getStoredExtensionMessageRules,
+  subscribeToStoredExtensionMessageRules,
+} from '../extension-message-rules';
 
 export interface PanelAppProps {
   repository: KoshkoRepository;
@@ -74,6 +79,12 @@ export function PanelApp({
   const [access, setAccess] = useState<AccessState>({ status: 'checking' });
   const [paused, setPaused] = useState(repository.isPaused);
   const [unreadCount, setUnreadCount] = useState(repository.getUnreadCount());
+  const [includeExtensionMessages, setIncludeExtensionMessages] = useState(
+    repository.getIncludeExtensionMessages(),
+  );
+  const [hiddenExtensionMessageCount, setHiddenExtensionMessageCount] = useState(
+    repository.getHiddenExtensionMessageCount(),
+  );
   const [displayTimelineEntries, setDisplayTimelineEntries] = useState(
     repository.getDisplayTimelineEntries(),
   );
@@ -105,6 +116,25 @@ export function PanelApp({
   );
   const targetRevision = useRef(0);
   const grantInFlight = useRef(false);
+
+  useEffect(() => {
+    let mounted = true;
+    if (typeof chrome === 'undefined' || !chrome.storage?.local) {
+      return () => {
+        mounted = false;
+      };
+    }
+    void getStoredExtensionMessageRules().then((config) => {
+      if (mounted) repository.setExtensionMessageRules(config.rules);
+    });
+    const unsubscribe = chrome.storage.onChanged
+      ? subscribeToStoredExtensionMessageRules((config) => repository.setExtensionMessageRules(config.rules))
+      : () => undefined;
+    return () => {
+      mounted = false;
+      unsubscribe();
+    };
+  }, [repository]);
 
   useEffect(() => {
     let mounted = true;
@@ -184,6 +214,8 @@ export function PanelApp({
     const syncFromRepository = (): void => {
       setPaused(repository.isPaused);
       setUnreadCount(repository.getUnreadCount());
+      setIncludeExtensionMessages(repository.getIncludeExtensionMessages());
+      setHiddenExtensionMessageCount(repository.getHiddenExtensionMessageCount());
       const timelineEntries = repository.getDisplayTimelineEntries();
       setDisplayTimelineEntries(timelineEntries);
       const log = repository.getDisplayLog();
@@ -228,6 +260,9 @@ export function PanelApp({
   const togglePaused = (): void => {
     repository.setPaused(!repository.isPaused);
   };
+  const toggleExtensionMessages = (): void => {
+    repository.setIncludeExtensionMessages(!repository.getIncludeExtensionMessages());
+  };
   const grantAccess = (site: InspectedSite): void => {
     const grantRevision = targetRevision.current;
     grantInFlight.current = true;
@@ -268,7 +303,7 @@ export function PanelApp({
     });
   }, []);
   const timelineEntries = displayTimelineEntries;
-  const actors = getActorColumns(timelineEntries);
+  const actors = getTimelineActors(timelineEntries);
   const logActors = getActorColumns(displayLog);
   const actorFilterActive = logActors.some(
     (actor) => !selectedActorKeys.has(actor.key),
@@ -301,11 +336,23 @@ export function PanelApp({
           <BrandLockup compact />
           <h1>Tab {tabId}</h1>
           <p className="muted" data-testid="capture-status">
-            {displayLog.length} entr{displayLog.length === 1 ? 'y' : 'ies'} captured
+            {displayLog.length} entr{displayLog.length === 1 ? 'y' : 'ies'} shown
+            {hiddenExtensionMessageCount > 0
+              ? ` · ${hiddenExtensionMessageCount} extensions hidden`
+              : ''}
             {paused ? ` · paused · +${unreadCount} unread` : ''}
           </p>
         </div>
         <div className="actions">
+          <label className="extension-filter-toggle">
+            <input
+              type="checkbox"
+              aria-label="Extensions"
+              checked={includeExtensionMessages}
+              onChange={toggleExtensionMessages}
+            />
+            Extensions
+          </label>
           <button
             className="ghost"
             data-testid="pause-button"
@@ -913,5 +960,7 @@ function getVisibleLogText(entry: KoshkoLogEntry): string {
 }
 
 function getTimelineEntryId(entry: KoshkoTimelineEntry): string {
-  return isCapturedSignal(entry) ? entry.signal.id : entry.error.id;
+  if (isCapturedSignal(entry)) return entry.signal.id;
+  if (isCapturedError(entry)) return entry.error.id;
+  return entry.id;
 }

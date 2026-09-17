@@ -1,6 +1,7 @@
 import type { CapturedErrorV1, CapturedSignalV1 } from '@koshko/protocol';
 import { describe, expect, it, vi } from 'vitest';
-import type { KoshkoTimelineActor, KoshkoTimelineEntry } from '../state/repository';
+import { actorKey, type KoshkoTimelineActor, type KoshkoTimelineEntry } from '../state/repository';
+import type { CapturedPostMessage } from '../post-message';
 import {
   TIMELINE_DETAIL_HEIGHT,
   TIMELINE_LANE_WIDTH,
@@ -9,9 +10,9 @@ import {
 } from './timeline-layout';
 
 const actors: KoshkoTimelineActor[] = [
-  { key: 'host::', reference: { id: 'host', label: 'Host' } },
-  { key: 'widget::one', reference: { id: 'widget', label: 'Widget', instanceId: 'one' } },
-  { key: 'worker::', reference: { id: 'worker', label: 'Worker' } },
+  { kind: 'semantic', key: actorKey({ id: 'host' }), reference: { id: 'host', label: 'Host' } },
+  { kind: 'semantic', key: actorKey({ id: 'widget', instanceId: 'one' }), reference: { id: 'widget', label: 'Widget', instanceId: 'one' } },
+  { kind: 'semantic', key: actorKey({ id: 'worker' }), reference: { id: 'worker', label: 'Worker' } },
 ];
 
 function captured(
@@ -79,7 +80,45 @@ function capturedError(): CapturedErrorV1 {
   };
 }
 
+function postMessageEntry(id = 'message-1'): CapturedPostMessage {
+  return {
+    kind: 'post-message',
+    id,
+    sequence: 1,
+    observedAt: Date.parse('2026-09-05T12:34:57.789Z'),
+    origin: 'https://sender.example.test',
+    source: 'parent',
+    data: { hello: 'world' },
+    tabId: 17,
+    frameId: 4,
+    iframeElementId: 'checkout',
+    navigationId: 'navigation-1',
+    frameUrl: 'https://frame.example.test/checkout',
+    frameOrigin: 'https://frame.example.test',
+  };
+}
+
 describe('createTimelineLayout', () => {
+  it('places postMessages on the receiving frame lane without edges', () => {
+    const message = postMessageEntry();
+    const result = createTimelineLayout({
+      entries: [message],
+      actors: [{ key: 'frame::4', kind: 'frame', frameId: 4, reference: { id: 'frame', instanceId: '4', label: '#checkout' } }],
+      expandedEntryIds: new Set(['message-1']),
+      selectedEntryId: 'message-1',
+      toggleDetails: vi.fn(),
+    });
+
+    const node = result.nodes.find((candidate) => candidate.id === 'event:message-1')!;
+    expect(node.position.x).toBe(20);
+    expect(node.selected).toBe(true);
+    expect(node.data).toMatchObject({ entryType: 'post-message', name: 'window.postMessage', direction: 'internal', expanded: true });
+    expect(node.ariaLabel).toContain('https://sender.example.test');
+    expect(result.timestamps[0]).toMatchObject({ time: '15:34:57.789', source: 'https://sender.example.test · parent' });
+    expect(result.edges).toHaveLength(0);
+    expect(result.nodes.find((candidate) => candidate.id === 'detail:message-1')?.data).toMatchObject({ json: expect.stringContaining('"hello": "world"') });
+  });
+
   it('positions chronological events in actor lanes and creates directional edges', () => {
     const result = layout([
       captured('forward'),
@@ -130,7 +169,8 @@ describe('createTimelineLayout', () => {
 
   it('renders errors as internal red entries in the Browser Console lane', () => {
     const browserConsole: KoshkoTimelineActor = {
-      key: 'browser-console::',
+      kind: 'semantic',
+      key: actorKey({ id: 'browser-console' }),
       reference: { id: 'browser-console', label: 'Browser Console' },
     };
     const result = createTimelineLayout({

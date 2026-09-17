@@ -16,7 +16,7 @@ without adding a backend, telemetry, or remote export.
 - Validates, normalizes, and redacts captured payloads.
 - Captures `console.error`, uncaught errors, and unhandled promise rejections.
 - Supports per-origin permissions, including cross-origin frames.
-- Pauses, clears, and exports captured signals as JSONL.
+- Pauses, clears, and exports captured diagnostic entries as JSONL.
 - Keeps captured data in local DevTools-session memory.
 - Provides `@koshko/emitter` and an optional development-only Nano Stores
   adapter for application instrumentation.
@@ -25,8 +25,8 @@ without adding a backend, telemetry, or remote export.
 
 | Tab | Use |
 | --- | --- |
-| **Timeline** | Actor lanes with explicit source-to-target links, timestamps, errors, and expandable event details. |
-| **Log** | Chronological signals, errors, and state mutations; filter by type or actor and search visible data. |
+| **Timeline** | Actor and browser-frame lanes with signals, errors, raw page messages, timestamps, and expandable details. |
+| **Log** | Chronological signals, errors, state mutations, and raw page messages; filter by type or actor and search visible data. |
 | **Global State** | Reconstructed JSON state with snapshot history, live/pinned selection, search, and copy support. |
 | **AI Log** | Local, prompt-ready trace of relevant entries and state. Select an 8k, 16k, 32k, 64k, or full context budget and copy it to the clipboard. |
 
@@ -116,9 +116,16 @@ are written to ignored `artifacts/`; see
 Koshko reads explicit `koshko` messages, selected JavaScript failures, state
 mutations, and raw `window.postMessage` traffic delivered to permitted inspected
 frames. Raw messages are shown as diagnostic evidence; Koshko does not infer
-application semantics from them. It does not record the DOM, capture network
-traffic, replay actions, or upload captured data. Keep instrumentation behind a
-compile-time development flag so it is excluded from production bundles.
+application semantics from them. Timeline frame lanes identify the receiving
+top-level page or iframe; they do not infer an uncertain sender identity.
+Known browser-extension bridges are classified by editable payload signatures
+and hidden by the panel's **Extensions** filter by default, keeping page and
+iframe traffic in focus. Classification is heuristic and spoofable: unknown
+extensions remain visible until a rule is added, and the built-in React
+DevTools and PIXI DevTools rules can be changed or removed in Options. Koshko
+does not record the DOM, capture network traffic, replay actions, or upload
+captured data. Keep instrumentation behind a compile-time development flag so
+it is excluded from production bundles.
 
 Raw message payloads can contain private application data. Koshko applies
 bounded serialization and sensitive-key redaction before display, AI copy, or

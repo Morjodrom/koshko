@@ -90,6 +90,8 @@ h2 { font-size: 1rem; }
 .toolbar, .section-header { justify-content: space-between; }
 .toolbar-copy { min-width: 0; }
 .actions { flex-wrap: wrap; }
+.extension-filter-toggle { display: inline-flex; align-items: center; gap: 6px; min-height: 38px; padding: 8px 10px; border: 1px solid var(--noir-line-strong); border-radius: 9px; background: var(--noir-surface-raised); color: var(--noir-ink); font-size: .86rem; font-weight: 700; }
+.extension-filter-toggle input { accent-color: var(--noir-accent); }
 .reconnecting-banner { margin-bottom: 12px; padding: 9px 12px; border: 1px solid color-mix(in srgb, #b66a00 58%, var(--noir-line)); border-radius: 10px; background: color-mix(in srgb, var(--noir-accent-soft) 58%, var(--noir-surface)); color: var(--noir-ink); font-size: .86rem; font-weight: 700; }
 
 button {
@@ -133,6 +135,14 @@ button.ghost { background: transparent; }
 [data-testid="access-checking"] .access-indicator { background: var(--noir-muted); box-shadow: none; }
 .list { display: grid; gap: 8px; margin: 12px 0 0; padding: 0; list-style: none; }
 .list-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 12px; border: 1px solid var(--noir-line); border-radius: 10px; background: var(--noir-surface-raised); overflow-wrap: anywhere; }
+.message-rules .section-header { align-items: flex-start; }
+.message-rules .section-header > div:first-child { display: grid; gap: 5px; min-width: 0; }
+.message-rules .section-header p { max-width: 46rem; font-size: .82rem; line-height: 1.4; }
+.message-rule { display: grid; gap: 12px; padding: 12px; border: 1px solid var(--noir-line); border-radius: 10px; background: var(--noir-surface-raised); }
+.message-rule-grid { display: grid; grid-template-columns: minmax(130px, 1fr) minmax(130px, 1fr) minmax(130px, .8fr) minmax(130px, 1fr) minmax(130px, .8fr); gap: 10px; }
+.message-rule-actions { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+.message-rule-actions label { display: inline-flex; align-items: center; gap: 6px; font-size: .82rem; }
+.message-rule select, .message-rule input { width: 100%; min-height: 38px; border: 1px solid var(--noir-line-strong); border-radius: 9px; padding: 8px 10px; background: var(--noir-surface-raised); color: var(--noir-ink); }
 
 .tabs { justify-content: flex-start; margin-top: 16px; padding-block: 8px; }
 .tab { min-height: 35px; border: 0; border-radius: 7px; background: transparent; color: var(--noir-muted); }
@@ -179,6 +189,8 @@ button.ghost { background: transparent; }
 .timeline-flow-event.entry-error { border-color: color-mix(in srgb, #bd3a45 65%, var(--noir-line)); background: color-mix(in srgb, #bd3a45 10%, var(--noir-surface-raised)); }
 .timeline-entry-kind { padding: 1px 4px; border-radius: 999px; font-family: Inter, ui-sans-serif, system-ui, sans-serif; font-size: 8px; font-weight: 850; letter-spacing: .04em; text-transform: uppercase; }
 .timeline-entry-kind.error { background: color-mix(in srgb, #bd3a45 18%, var(--noir-surface-raised)); color: #bd3a45; }
+.timeline-entry-kind.post-message { background: color-mix(in srgb, #c17a1b 18%, var(--noir-surface-raised)); color: #9a5a0a; }
+.timeline-flow-event.entry-post-message { --event-accent: #c17a1b; }
 .timeline-flow-handle { width: 7px; height: 7px; border: 0; background: var(--event-accent); pointer-events: none; }
 .timeline-flow-target { width: 10px !important; height: 10px !important; pointer-events: none; }
 .timeline-flow-target-handle { width: 10px; height: 10px; border: 2px solid var(--noir-surface-raised); background: var(--event-accent); box-shadow: 0 0 0 2px color-mix(in srgb, var(--event-accent) 28%, transparent); pointer-events: none; }
@@ -264,6 +276,8 @@ button.ghost { background: transparent; }
   .ai-budget select { width: 100%; }
   .tab { flex: 0 0 auto; }
   .list-row { align-items: flex-start; flex-direction: column; }
+  .message-rules .section-header { flex-direction: column; }
+  .message-rule-grid { grid-template-columns: 1fr; }
   .state-inspector { grid-template-columns: 1fr; }
   .state-history-list { max-height: 240px; min-height: 0; }
   .global-state { max-height: none; min-height: 200px; }

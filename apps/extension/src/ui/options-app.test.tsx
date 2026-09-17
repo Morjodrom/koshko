@@ -12,6 +12,10 @@ import {
   PANEL_MESSAGE_RECONCILE_PERMISSIONS,
   STORAGE_KEY,
 } from '../messaging/messages';
+import {
+  EXTENSION_MESSAGE_RULES_STORAGE_KEY,
+  defaultExtensionMessageRulesConfig,
+} from '../extension-message-rules';
 
 describe('OptionsApp', () => {
   let origins: string[];
@@ -19,19 +23,29 @@ describe('OptionsApp', () => {
   let remove: ReturnType<typeof vi.fn>;
   let set: ReturnType<typeof vi.fn>;
   let sendMessage: ReturnType<typeof vi.fn>;
+  let storedRules: unknown;
+  let storageChangeListener: ((
+    changes: Record<string, chrome.storage.StorageChange>,
+    areaName: string,
+  ) => void) | undefined;
 
   afterEach(cleanup);
 
   beforeEach(() => {
     origins = [];
+    storedRules = undefined;
+    storageChangeListener = undefined;
     request = vi.fn().mockResolvedValue(true);
     remove = vi.fn(async (permission: { origins: string[] }) => {
       const removed = new Set(permission.origins.map((pattern) => pattern.replace(/\/\*$/, '')));
       origins = origins.filter((origin) => !removed.has(origin));
       return true;
     });
-    set = vi.fn(async (value: Record<string, string[]>) => {
-      origins = value[STORAGE_KEY];
+    set = vi.fn(async (value: Record<string, unknown>) => {
+      if (Array.isArray(value[STORAGE_KEY])) origins = value[STORAGE_KEY] as string[];
+      if (EXTENSION_MESSAGE_RULES_STORAGE_KEY in value) {
+        storedRules = value[EXTENSION_MESSAGE_RULES_STORAGE_KEY];
+      }
     });
     sendMessage = vi.fn(async (message: { type: string; origin?: string }) => {
       if (message.type === PANEL_MESSAGE_ACTIVATE_ORIGIN && message.origin) {
@@ -49,8 +63,18 @@ describe('OptionsApp', () => {
         },
         storage: {
           local: {
-            get: vi.fn(async () => ({ [STORAGE_KEY]: origins })),
+            get: vi.fn(async (defaults: Record<string, unknown>) => ({
+              ...defaults,
+              [STORAGE_KEY]: origins,
+              ...(storedRules === undefined ? {} : {
+                [EXTENSION_MESSAGE_RULES_STORAGE_KEY]: storedRules,
+              }),
+            })),
             set,
+          },
+          onChanged: {
+            addListener: vi.fn((listener: typeof storageChangeListener) => { storageChangeListener = listener; }),
+            removeListener: vi.fn(),
           },
         },
         runtime: { sendMessage },
@@ -141,5 +165,81 @@ describe('OptionsApp', () => {
     expect(sendMessage).toHaveBeenCalledWith({
       type: PANEL_MESSAGE_RECONCILE_PERMISSIONS,
     });
+  });
+
+  it('does not delete a rule while an edited required field is invalid', async () => {
+    render(<OptionsApp />);
+    await waitFor(() => expect(screen.getByDisplayValue('React DevTools')).toBeTruthy());
+
+    const nameInput = screen.getAllByDisplayValue('React DevTools')[0];
+    fireEvent.change(nameInput, { target: { value: '' } });
+
+    expect(screen.getByText('Rule not saved: complete all fields with valid values.')).toBeTruthy();
+    expect(set).not.toHaveBeenCalled();
+    expect((nameInput as HTMLInputElement).value).toBe('');
+  });
+
+  it('loads defaults and supports add, typed editing, enable, and delete persistence', async () => {
+    render(<OptionsApp />);
+    await waitFor(() => expect(screen.getByDisplayValue('React DevTools')).toBeTruthy());
+    expect(screen.getByDisplayValue('PIXI DevTools')).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Add rule' }));
+    await waitFor(() => expect(screen.getByDisplayValue('New extension')).toBeTruthy());
+    expect((storedRules as { rules: unknown[] }).rules).toHaveLength(3);
+
+    const matchSelects = screen.getAllByLabelText('Match');
+    fireEvent.change(matchSelects[2], { target: { value: 'equals' } });
+    const typeSelects = screen.getAllByLabelText('Value type');
+    fireEvent.change(typeSelects[2], { target: { value: 'boolean' } });
+    expect((screen.getAllByLabelText('Value')[2] as HTMLInputElement).value).toBe('false');
+
+    fireEvent.click(screen.getAllByLabelText('Enabled')[2]);
+    await waitFor(() => expect(
+      (storedRules as { rules: Array<{ enabled: boolean; value?: unknown }> }).rules[2],
+    ).toMatchObject({ enabled: false, value: false }));
+
+    fireEvent.click(screen.getAllByRole('button', { name: 'Delete' })[2]);
+    await waitFor(() => expect((storedRules as { rules: unknown[] }).rules).toHaveLength(2));
+  });
+
+  it('applies live stored changes and resets the complete rule list after confirmation', async () => {
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true);
+    render(<OptionsApp />);
+    await waitFor(() => expect(storageChangeListener).toBeTypeOf('function'));
+
+    storageChangeListener?.({
+      [EXTENSION_MESSAGE_RULES_STORAGE_KEY]: {
+        newValue: {
+          version: 1,
+          rules: [{
+            id: 'custom',
+            name: 'Custom Tool',
+            enabled: true,
+            path: 'meta.tool',
+            operator: 'equals',
+            value: 'custom',
+          }],
+        },
+      },
+    }, 'local');
+    expect(await screen.findByDisplayValue('Custom Tool')).toBeTruthy();
+    expect(screen.queryByDisplayValue('React DevTools')).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Reset all rules to defaults' }));
+
+    await waitFor(() => expect(screen.getByDisplayValue('React DevTools')).toBeTruthy());
+    expect(confirm).toHaveBeenCalledTimes(1);
+    expect(storedRules).toEqual(defaultExtensionMessageRulesConfig());
+    confirm.mockRestore();
+  });
+
+  it('falls back to defaults when stored configuration is unusable', async () => {
+    storedRules = { version: 99, rules: [{ nope: true }] };
+
+    render(<OptionsApp />);
+
+    expect(await screen.findByDisplayValue('React DevTools')).toBeTruthy();
+    expect(screen.getByDisplayValue('PIXI DevTools')).toBeTruthy();
   });
 });

@@ -51,6 +51,60 @@ describe('window capture', () => {
     }));
   });
 
+  it('forwards React and PIXI DevTools messages for panel-side classification', () => {
+    const sendMessage = vi.fn(() => Promise.resolve());
+    vi.stubGlobal('chrome', { runtime: { sendMessage } });
+    cleanups.push(startCapture());
+
+    window.dispatchEvent(new MessageEvent('message', {
+      data: { source: 'react-devtools-content-script', hello: true },
+    }));
+    window.dispatchEvent(new MessageEvent('message', {
+      data: { source: 'react-devtools-content-script', hello: false },
+    }));
+    window.dispatchEvent(new MessageEvent('message', {
+      data: { method: 'pixi-inactive', data: '{}' },
+    }));
+
+    expect(sendMessage).toHaveBeenCalledTimes(3);
+    expect(sendMessage).toHaveBeenNthCalledWith(1, expect.objectContaining({
+      sequence: 1,
+      data: { source: 'react-devtools-content-script', hello: true },
+    }));
+    expect(sendMessage).toHaveBeenNthCalledWith(2, expect.objectContaining({
+      sequence: 2,
+      data: { source: 'react-devtools-content-script', hello: false },
+    }));
+    expect(sendMessage).toHaveBeenNthCalledWith(3, expect.objectContaining({
+      sequence: 3,
+      data: { method: 'pixi-inactive', data: '{}' },
+    }));
+  });
+
+  it('does not execute hostile getters and keeps captured sequences contiguous', () => {
+    const sendMessage = vi.fn(() => Promise.resolve());
+    vi.stubGlobal('chrome', { runtime: { sendMessage } });
+    cleanups.push(startCapture());
+    const data: Record<string, unknown> = {};
+    Object.defineProperty(data, 'source', {
+      enumerable: true,
+      get: () => { throw new Error('source getter called'); },
+    });
+    Object.defineProperty(data, 'hello', {
+      enumerable: true,
+      get: () => { throw new Error('hello getter called'); },
+    });
+
+    expect(() => window.dispatchEvent(new MessageEvent('message', { data }))).not.toThrow();
+    window.dispatchEvent(new MessageEvent('message', {
+      data: { source: 'react-devtools-content-script', hello: true, extra: 1 },
+    }));
+    window.dispatchEvent(new MessageEvent('message', { data: { ok: true } }));
+
+    expect(sendMessage).toHaveBeenCalledTimes(3);
+    expect(sendMessage.mock.calls.map((call) => (call as unknown as [{ sequence: number }])[0].sequence)).toEqual([1, 2, 3]);
+  });
+
   it('captures origin, source classification, unique ids, and monotonic sequence', () => {
     const sendMessage = vi.fn(() => Promise.resolve());
     vi.stubGlobal('chrome', { runtime: { sendMessage } });

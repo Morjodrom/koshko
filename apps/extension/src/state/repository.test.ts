@@ -4,9 +4,11 @@ import {
   actorKey,
   formatDateTime,
   getActorColumns,
+  getTimelineActors,
   type KoshkoLogEntry,
 } from './repository';
 import type { CapturedPostMessage } from '../post-message';
+import { defaultExtensionMessageRulesConfig } from '../extension-message-rules';
 
 function entryID(entry: KoshkoLogEntry): string {
   if ('signal' in entry) return entry.signal.id;
@@ -38,6 +40,64 @@ function postMessage(
 }
 
 describe('koshko inspector repository', () => {
+  it('builds distinct frame lanes and preserves semantic frame actors', () => {
+    const top = postMessage('top', 1);
+    const iframe = postMessage('iframe', 2, {
+      frameId: 7,
+      iframeElementId: 'checkout-frame',
+      frameUrl: 'https://checkout.example.test/form?token=redacted',
+    });
+    const fallback = postMessage('fallback', 3, { frameId: 9, frameUrl: '' });
+    const urlFallback = postMessage('url-fallback', 4, {
+      frameId: 10,
+      frameUrl: 'https://widgets.example.test/checkout/frame?token=redacted',
+    });
+
+    const actors = getTimelineActors([top, iframe, fallback, urlFallback]);
+
+    expect(actors.map((actor) => actor.key)).toEqual(['frame::0', 'frame::7', 'frame::9', 'frame::10']);
+    expect(actors[0].reference.label).toBe('example.com');
+    expect(actors[1].reference.label).toBe('#checkout-frame');
+    expect(actors[2].reference.label).toBe('Frame 9');
+    expect(actors[3].reference.label).toBe('widgets.example.test/checkout/frame');
+    expect(actorKey({ id: 'frame', instanceId: '0' })).toBe('actor::frame::0');
+    expect(getActorColumns([top, iframe, fallback, urlFallback])).toEqual([]);
+  });
+
+  it('keeps semantic and frame actors distinct in a mixed timeline without state mutations', () => {
+    const repo = new KoshkoRepository();
+    const base = {
+      tabId: 1,
+      frameId: 0,
+      navigationId: 'nav',
+      frameUrl: 'https://example.com',
+      frameOrigin: 'https://example.com',
+    };
+    repo.record({
+      ...base,
+      observedAt: 30,
+      signal: {
+        protocol: 'koshko', version: 1, id: 'signal', producerId: 'signal', producerSequence: 1, occurredAt: 30,
+        source: { id: 'frame', instanceId: '0' }, name: 'frame.ready',
+      },
+    });
+    repo.record(postMessage('message', 20));
+    repo.record({
+      ...base,
+      observedAt: 10,
+      mutation: {
+        protocol: 'koshko', version: 1, id: 'state', producerId: 'state', producerSequence: 1, occurredAt: 10,
+        patch: [{ op: 'add', path: '/ready', value: true }],
+      },
+    });
+
+    expect(repo.getTimelineEntries().map(entryID)).toEqual(['message', 'signal']);
+    expect(getTimelineActors(repo.getTimelineEntries()).map((actor) => actor.key)).toEqual([
+      'actor::frame::0',
+      'frame::0',
+    ]);
+  });
+
   it('notifies subscribers exactly once for active, paused, and navigation records', () => {
     const repo = new KoshkoRepository();
     let notifications = 0;
@@ -206,7 +266,7 @@ describe('koshko inspector repository', () => {
     repo.record(postMessage('earlier', 10));
 
     expect(repo.getDisplayLog().map(entryID)).toEqual(['earlier', 'later']);
-    expect(repo.getTimelineEntries()).toEqual([]);
+    expect(repo.getTimelineEntries().map(entryID)).toEqual(['earlier', 'later']);
     expect(repo.getDisplayState()).toEqual({});
 
     repo.setPaused(true);
@@ -227,6 +287,101 @@ describe('koshko inspector repository', () => {
 
     repo.record(postMessage('next-navigation', 40, { navigationId: 'next-nav' }));
     expect(repo.getLog().map(entryID)).toEqual(['next-navigation']);
+  });
+
+  it('hides classified extension messages by default and reveals retained history when enabled', () => {
+    const repo = new KoshkoRepository();
+    repo.record(postMessage('react', 1, { data: { source: 'react-devtools-content-script', hello: true } }));
+    repo.record(postMessage('page', 2, { data: { source: 'application', hello: true } }));
+
+    expect(repo.getDisplayLog().map(entryID)).toEqual(['page']);
+    expect(repo.getHiddenExtensionMessageCount()).toBe(1);
+    expect(JSON.parse(repo.exportJsonl().split('\n')[0])).toMatchObject({
+      count: 1,
+      postMessageCount: 1,
+      includedExtensionPostMessageCount: 0,
+      omittedExtensionPostMessageCount: 1,
+    });
+
+    repo.setIncludeExtensionMessages(true);
+
+    expect(repo.getDisplayLog().map(entryID)).toEqual(['react', 'page']);
+    expect(repo.getHiddenExtensionMessageCount()).toBe(0);
+    expect(JSON.parse(repo.exportJsonl().split('\n')[0])).toMatchObject({
+      count: 2,
+      postMessageCount: 2,
+      includedExtensionPostMessageCount: 1,
+      omittedExtensionPostMessageCount: 0,
+    });
+  });
+
+  it('reclassifies historical entries when editable rules change', () => {
+    const repo = new KoshkoRepository();
+    repo.record(postMessage('pixi', 1, { data: { method: 'pixi-inactive', data: '{}' } }));
+    expect(repo.getDisplayLog()).toHaveLength(0);
+
+    const config = defaultExtensionMessageRulesConfig();
+    repo.setExtensionMessageRules(config.rules.filter((rule) => rule.id !== 'pixi-devtools'));
+
+    expect(repo.getDisplayLog().map(entryID)).toEqual(['pixi']);
+    expect(repo.getHiddenExtensionMessageCount()).toBe(0);
+  });
+
+  it('recomputes paused unread visibility without losing retained entries', () => {
+    const repo = new KoshkoRepository();
+    repo.setPaused(true);
+    repo.record(postMessage('react', 1, { data: { source: 'react-devtools-backend' } }));
+    repo.record(postMessage('page', 2, { data: { value: true } }));
+
+    expect(repo.getUnreadCount()).toBe(1);
+    repo.setIncludeExtensionMessages(true);
+    expect(repo.getUnreadCount()).toBe(2);
+    repo.setIncludeExtensionMessages(false);
+    expect(repo.getUnreadCount()).toBe(1);
+
+    repo.setPaused(false);
+    expect(repo.getDisplayLog().map(entryID)).toEqual(['page']);
+  });
+
+  it('preserves filter settings across clear and navigation while keeping semantic entries visible', () => {
+    const repo = new KoshkoRepository();
+    const customRule = {
+      id: 'custom-tool',
+      name: 'Custom Tool',
+      enabled: true,
+      path: 'tool',
+      operator: 'equals' as const,
+      value: 'extension',
+    };
+    repo.setExtensionMessageRules([customRule]);
+    repo.setIncludeExtensionMessages(true);
+    repo.clear();
+
+    expect(repo.getIncludeExtensionMessages()).toBe(true);
+    expect(repo.getExtensionMessageRules()).toEqual([customRule]);
+
+    repo.record(postMessage('first-document', 1, { data: { tool: 'extension' } }));
+    repo.record(postMessage('next-document', 2, {
+      navigationId: 'next-navigation',
+      data: { tool: 'extension' },
+    }));
+    expect(repo.getIncludeExtensionMessages()).toBe(true);
+    expect(repo.getExtensionMessageRules()).toEqual([customRule]);
+
+    repo.setIncludeExtensionMessages(false);
+    repo.record({
+      signal: {
+        protocol: 'koshko', version: 1, id: 'semantic', producerId: 'tool', producerSequence: 1, occurredAt: 3,
+        source: { id: 'host' }, name: 'extension.semantic',
+      },
+      observedAt: 3,
+      tabId: 1,
+      frameId: 0,
+      navigationId: 'next-navigation',
+      frameUrl: 'https://example.com',
+      frameOrigin: 'https://example.com',
+    });
+    expect(repo.getDisplayLog().map(entryID)).toEqual(['semantic']);
   });
 
   it('discovers actors from displayed signals only while paused', () => {

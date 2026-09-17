@@ -3,7 +3,7 @@ import {
   PANEL_MESSAGE_CAPTURE,
   type CaptureTransportMessage,
 } from './messaging/messages';
-import { normalizePostMessageData, type PostMessageSource } from './post-message';
+import { normalizeIframeElementId, normalizePostMessageData, type PostMessageSource } from './post-message';
 
 const CAPTURE_STATE = Symbol.for('koshko.capture.v1');
 
@@ -24,6 +24,7 @@ export function startCapture(): () => void {
   const onMessage = (event: MessageEvent): void => {
     try {
       const observedAt = Date.now();
+      const iframeElementId = getIframeElementId();
       const raw = {
         type: PANEL_MESSAGE_CAPTURE,
         kind: 'post-message' as const,
@@ -36,6 +37,7 @@ export function startCapture(): () => void {
         navigationId,
         frameUrl: location.href,
         frameOrigin: location.origin,
+        ...(iframeElementId === undefined ? {} : { iframeElementId }),
       };
       void chrome.runtime.sendMessage(raw).catch(() => {});
 
@@ -47,6 +49,7 @@ export function startCapture(): () => void {
         navigationId,
         frameUrl: location.href,
         frameOrigin: location.origin,
+        ...(iframeElementId === undefined ? {} : { iframeElementId }),
       };
       let payload: CaptureTransportMessage;
       if (parsed.type === 'signal') {
@@ -101,4 +104,12 @@ function classifySource(source: MessageEvent['source']): PostMessageSource {
     return 'other';
   }
   return 'other';
+}
+
+function getIframeElementId(): string | undefined {
+  try {
+    return normalizeIframeElementId(window.frameElement?.id);
+  } catch {
+    return undefined;
+  }
 }

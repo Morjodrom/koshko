@@ -10,14 +10,32 @@ import {
   type KoshkoErrorV1,
 } from '@koshko/protocol';
 import type { CapturedPostMessage } from '../post-message';
+import {
+  classifyExtensionPostMessage,
+  defaultExtensionMessageRulesConfig,
+  EXTENSION_MESSAGE_RULES_VERSION,
+  normalizeExtensionMessageRules,
+  type ExtensionMessageRule,
+} from '../extension-message-rules';
 
-export interface KoshkoTimelineActor {
+interface KoshkoTimelineActorBase {
   key: string;
   reference: ActorReference;
 }
 
-export type KoshkoTimelineEntry = CapturedSignalV1 | CapturedErrorV1;
-export type KoshkoLogEntry = KoshkoTimelineEntry | CapturedStateMutationV1 | CapturedPostMessage;
+export interface KoshkoSemanticTimelineActor extends KoshkoTimelineActorBase {
+  kind: 'semantic';
+}
+
+export interface KoshkoFrameTimelineActor extends KoshkoTimelineActorBase {
+  kind: 'frame';
+  frameId: number;
+}
+
+export type KoshkoTimelineActor = KoshkoSemanticTimelineActor | KoshkoFrameTimelineActor;
+
+export type KoshkoTimelineEntry = CapturedSignalV1 | CapturedErrorV1 | CapturedPostMessage;
+export type KoshkoLogEntry = KoshkoTimelineEntry | CapturedStateMutationV1;
 
 export interface KoshkoStateSnapshot {
   index: number;
@@ -55,7 +73,11 @@ export class KoshkoRepository {
 
   private selectedStateSnapshotIndex: number | null = null;
 
-  private unreadCount = 0;
+  private unreadEntries: KoshkoLogEntry[] = [];
+
+  private extensionMessageRules: readonly ExtensionMessageRule[] = defaultExtensionMessageRulesConfig().rules;
+
+  private includeExtensionMessages = false;
 
   private topFrameIdentity: string | undefined;
 
@@ -68,11 +90,11 @@ export class KoshkoRepository {
   }
 
   getDisplayTimelineEntries(): KoshkoTimelineEntry[] {
-    return [...this.displayTimelineEntries];
+    return this.getVisibleEntries(this.displayTimelineEntries);
   }
 
   getDisplayLog(): KoshkoLogEntry[] {
-    return [...this.displayLog];
+    return this.getVisibleEntries(this.displayLog);
   }
 
   getDisplayState(): JsonObject {
@@ -103,7 +125,36 @@ export class KoshkoRepository {
   }
 
   getUnreadCount(): number {
-    return this.unreadCount;
+    return this.getVisibleEntries(this.unreadEntries).length;
+  }
+
+  getExtensionMessageRules(): readonly ExtensionMessageRule[] {
+    return this.extensionMessageRules.map((rule) => ({ ...rule }));
+  }
+
+  setExtensionMessageRules(rules: readonly ExtensionMessageRule[]): void {
+    this.extensionMessageRules = normalizeExtensionMessageRules({
+      version: EXTENSION_MESSAGE_RULES_VERSION,
+      rules,
+    }).rules;
+    this.notify();
+  }
+
+  getIncludeExtensionMessages(): boolean {
+    return this.includeExtensionMessages;
+  }
+
+  setIncludeExtensionMessages(include: boolean): void {
+    if (this.includeExtensionMessages === include) return;
+    this.includeExtensionMessages = include;
+    this.notify();
+  }
+
+  getHiddenExtensionMessageCount(): number {
+    if (this.includeExtensionMessages) return 0;
+    return this.displayLog.filter(
+      (entry): entry is CapturedPostMessage => isCapturedPostMessage(entry) && this.isExtensionMessage(entry),
+    ).length;
   }
 
   subscribe(listener: () => void): () => void {
@@ -116,7 +167,7 @@ export class KoshkoRepository {
   setPaused(paused: boolean): void {
     this.paused = paused;
     if (!paused) {
-      this.unreadCount = 0;
+      this.unreadEntries = [];
       this.syncDisplaySnapshot();
     }
     this.notify();
@@ -159,7 +210,7 @@ export class KoshkoRepository {
       }
     }
     if (this.paused) {
-      this.unreadCount += 1;
+      this.unreadEntries.push(captured);
     } else {
       this.syncDisplaySnapshot();
     }
@@ -180,7 +231,7 @@ export class KoshkoRepository {
     this.stateHistory = [initialStateSnapshot];
     this.displayStateHistory = this.stateHistory;
     this.selectedStateSnapshotIndex = null;
-    this.unreadCount = 0;
+    this.unreadEntries = [];
     this.topFrameIdentity = undefined;
   }
 
@@ -189,27 +240,44 @@ export class KoshkoRepository {
   }
 
   getTimelineEntries(): KoshkoTimelineEntry[] {
-    return [...this.capturedSignals, ...this.capturedErrors].sort(compareCapturedLogEntries);
+    return this.getVisibleEntries(this.getAllTimelineEntries());
   }
 
-  getLog(): KoshkoLogEntry[] {
-    return [...this.capturedLog].sort(compareCapturedLogEntries);
-  }
-
-  exportJsonl(): string {
-    const entries = [
+  private getAllTimelineEntries(): KoshkoTimelineEntry[] {
+    return [
       ...this.capturedSignals,
       ...this.capturedErrors,
       ...this.capturedPostMessages,
     ].sort(compareCapturedLogEntries);
+  }
+
+  getLog(): KoshkoLogEntry[] {
+    return this.getVisibleEntries(this.capturedLog).sort(compareCapturedLogEntries);
+  }
+
+  exportJsonl(): string {
+    const entries = this.getVisibleEntries([
+      ...this.capturedSignals,
+      ...this.capturedErrors,
+      ...this.capturedPostMessages,
+    ]).sort(compareCapturedLogEntries);
+    const classifiedExtensionPostMessageCount = this.capturedPostMessages
+      .filter((entry) => this.isExtensionMessage(entry)).length;
+    const includedExtensionPostMessageCount = this.includeExtensionMessages
+      ? classifiedExtensionPostMessageCount
+      : 0;
+    const omittedExtensionPostMessageCount = classifiedExtensionPostMessageCount
+      - includedExtensionPostMessageCount;
     const header = {
       protocol: 'koshko',
       version: 1,
       type: 'export-metadata',
       count: entries.length,
-      signalCount: this.capturedSignals.length,
-      errorCount: this.capturedErrors.length,
-      postMessageCount: this.capturedPostMessages.length,
+      signalCount: entries.filter(isCapturedSignal).length,
+      errorCount: entries.filter(isCapturedError).length,
+      postMessageCount: entries.filter(isCapturedPostMessage).length,
+      includedExtensionPostMessageCount,
+      omittedExtensionPostMessageCount,
       exportedAt: new Date().toISOString(),
     };
 
@@ -226,10 +294,20 @@ export class KoshkoRepository {
 
   private syncDisplaySnapshot(): void {
     this.displaySignals = this.getSignals();
-    this.displayTimelineEntries = this.getTimelineEntries();
-    this.displayLog = this.getLog();
+    this.displayTimelineEntries = this.getAllTimelineEntries();
+    this.displayLog = [...this.capturedLog].sort(compareCapturedLogEntries);
     this.displayStateHistory = this.stateHistory;
     this.displayState = this.getSelectedDisplayState();
+  }
+
+  private getVisibleEntries<T extends KoshkoLogEntry>(entries: readonly T[]): T[] {
+    return entries.filter((entry) => !isCapturedPostMessage(entry)
+      || this.includeExtensionMessages
+      || !this.isExtensionMessage(entry));
+  }
+
+  private isExtensionMessage(entry: CapturedPostMessage): boolean {
+    return classifyExtensionPostMessage(entry.data, this.extensionMessageRules) !== null;
   }
 
   private getSelectedDisplayState(): JsonObject {
@@ -401,14 +479,54 @@ export function getActorColumns(entries: readonly KoshkoLogEntry[]): KoshkoTimel
       const key = actorKey(reference);
       if (seen.has(key)) continue;
       seen.add(key);
-      columns.push({ key, reference });
+      columns.push({ kind: 'semantic', key, reference });
     }
   }
   return columns;
 }
 
+export function getTimelineActors(entries: readonly KoshkoTimelineEntry[]): KoshkoTimelineActor[] {
+  const actors = getActorColumns(entries);
+  const seen = new Set(actors.map((actor) => actor.key));
+  for (const entry of entries) {
+    if (!isCapturedPostMessage(entry)) continue;
+    const frame = frameActor(entry);
+    if (seen.has(frame.key)) continue;
+    seen.add(frame.key);
+    actors.push(frame);
+  }
+  return actors;
+}
+
+export function frameActor(entry: CapturedPostMessage): KoshkoFrameTimelineActor {
+  const key = `frame::${entry.frameId}`;
+  const compactUrl = compactFrameUrl(entry.frameUrl);
+  const label = entry.frameId === 0
+    ? compactUrl || `Frame ${entry.frameId}`
+    : entry.iframeElementId
+      ? `#${entry.iframeElementId}`
+      : compactUrl || `Frame ${entry.frameId}`;
+  return {
+    kind: 'frame',
+    key,
+    frameId: entry.frameId,
+    reference: { id: 'frame', instanceId: String(entry.frameId), label },
+  };
+}
+
+function compactFrameUrl(value: string): string {
+  try {
+    const url = new URL(value);
+    const text = `${url.host}${url.pathname}`.replace(/\/$/, '') || url.host;
+    return text.length > 36 ? `${text.slice(0, 33)}…` : text;
+  } catch {
+    const text = value.replace(/[?#].*$/, '');
+    return text.length > 36 ? `${text.slice(0, 33)}…` : text;
+  }
+}
+
 export function actorKey(reference: ActorReference): string {
-  return `${reference.id}::${reference.instanceId ?? ''}`;
+  return `actor::${reference.id}::${reference.instanceId ?? ''}`;
 }
 
 export function formatActor(reference: ActorReference): string {
