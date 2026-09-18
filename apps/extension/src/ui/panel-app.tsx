@@ -9,6 +9,7 @@ import {
 } from 'react';
 import type {
   JsonObject,
+  JsonValue,
 } from '@koshko/protocol';
 import type { PanelCaptureMessage } from '../messaging/messages';
 import {
@@ -939,8 +940,18 @@ function getLogEntryMetadata(entry: KoshkoLogEntry): {
 function getLogEntryName(entry: KoshkoLogEntry): string {
   if (isCapturedSignal(entry)) return entry.signal.name;
   if (isCapturedError(entry)) return getErrorDisplayMessage(entry.error);
-  if (isCapturedPostMessage(entry)) return 'window.postMessage';
+  if (isCapturedPostMessage(entry)) return getPostMessageLogName(entry.data);
   return entry.mutation.label ?? 'state mutation';
+}
+
+function getPostMessageLogName(data: JsonValue): string {
+  const name = JSON.stringify(data)
+    .replace(/[^a-z0-9]+/gi, ' ')
+    .trim()
+    .slice(0, 50)
+    .trimEnd();
+
+  return name || 'window.postMessage';
 }
 
 function getLogEntrySource(entry: KoshkoLogEntry) {

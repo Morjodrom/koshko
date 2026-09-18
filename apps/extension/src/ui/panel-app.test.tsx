@@ -662,7 +662,7 @@ describe('PanelApp', () => {
     const row = document.querySelector<HTMLElement>('[data-log-entry-type="post-message"]')!;
     expect(row.classList).toContain('post-message');
     expect(row.textContent).toContain('PostMessage');
-    expect(row.textContent).toContain('window.postMessage');
+    expect(row.textContent).toContain('action checkout ready token Redacted');
     expect(row.textContent).toContain('https://sender.example.test');
     expect(row.textContent).toContain('parent');
     expect(row.textContent).toContain('checkout.ready');
@@ -674,6 +674,10 @@ describe('PanelApp', () => {
       target: { value: 'sender.example.test' },
     });
     expect(document.querySelectorAll('[data-log-entry-type="post-message"]')).toHaveLength(1);
+    fireEvent.change(screen.getByRole('searchbox', { name: 'Search log' }), {
+      target: { value: 'action checkout ready' },
+    });
+    expect(document.querySelectorAll('[data-log-entry-type="post-message"]')).toHaveLength(1);
 
     fireEvent.click(screen.getByRole('button', { name: 'AI Log' }));
     const aiLog = screen.getByRole('textbox', { name: 'AI-ready Koshko log' }) as HTMLTextAreaElement;
@@ -683,6 +687,37 @@ describe('PanelApp', () => {
     const exported = repository.exportJsonl();
     expect(exported).toContain('"postMessageCount":1');
     expect(exported).toContain('"id":"post-message-1"');
+  });
+
+  it('derives bounded postMessage log names from payloads with a generic fallback', () => {
+    const { port } = mountPanel();
+
+    act(() => {
+      port.emitPostMessage(capturedPostMessage({
+        id: 'named-message',
+        sequence: 1,
+        data: { action: 'checkout.ready', event_id: 'order#42' },
+      }));
+      port.emitPostMessage(capturedPostMessage({
+        id: 'long-message',
+        sequence: 2,
+        data: { label: 'a'.repeat(80) },
+      }));
+      port.emitPostMessage(capturedPostMessage({
+        id: 'fallback-message',
+        sequence: 3,
+        data: '---...!!!',
+      }));
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Log' }));
+
+    const names = Array.from(document.querySelectorAll<HTMLElement>('[data-log-entry-type="post-message"]'))
+      .map((entry) => entry.dataset.entryName);
+    expect(names).toContain('action checkout ready event id order 42');
+    expect(names).toContain(`label ${'a'.repeat(44)}`);
+    expect(names).toContain('window.postMessage');
+    expect(names.every((name) => name !== undefined && name.length <= 50)).toBe(true);
   });
 
   it('formats stringified JSON in Log and Timeline when enabled', () => {
