@@ -4,6 +4,7 @@ import {
   normalizeCapturedStateMutationV1,
 } from '@koshko/protocol';
 import { normalizeCapturedPostMessage } from './post-message';
+import { getUserEventTrackingEnabled, parseUserEventMessage } from './user-event-tracking';
 import {
   PANEL_MESSAGE_CAPTURE,
   PANEL_MESSAGE_ACTIVATE_ORIGIN,
@@ -54,6 +55,11 @@ chrome.runtime.onMessage.addListener((message: BackgroundMessage, sender, sendRe
     return;
   }
 
+  if (message.type === 'koshko:user-event') {
+    void routeUserEventMessage(message, sender);
+    return;
+  }
+
   if (message.type === PANEL_MESSAGE_ACTIVATE_ORIGIN) {
     if (
       typeof message.origin !== 'string'
@@ -82,6 +88,46 @@ chrome.runtime.onMessage.addListener((message: BackgroundMessage, sender, sendRe
     return true;
   }
 });
+
+async function routeUserEventMessage(message: unknown, sender: chrome.runtime.MessageSender): Promise<void> {
+  if (!await getUserEventTrackingEnabled().catch(() => false)) return;
+  const event = parseUserEventMessage(message);
+  const tabId = sender.tab?.id;
+  if (!event || tabId == null) return;
+
+  // Never trust page-provided routing metadata. The sender owns tab/frame identity.
+  const captured = normalizeCapturedPostMessage({
+    type: PANEL_MESSAGE_CAPTURE,
+    kind: 'post-message',
+    id: `user-event:${event.navigationId}:${event.sequence}`,
+    sequence: event.sequence,
+    observedAt: event.occurredAt,
+    origin: event.frameOrigin,
+    source: 'self',
+    data: {
+      type: 'koshko:user-event',
+      version: event.version,
+      eventType: event.eventType,
+      ...(event.target ? { target: event.target } : {}),
+    },
+    tabId,
+    frameId: sender.frameId ?? -1,
+    documentId: sender.documentId,
+    navigationId: event.navigationId,
+    frameUrl: event.frameUrl,
+    frameOrigin: event.frameOrigin,
+  });
+  if (!captured) return;
+
+  const ports = panelPorts.get(tabId);
+  if (!ports || ports.size === 0) return;
+  const payload: PanelCaptureMessage = {
+    type: PANEL_MESSAGE_CAPTURE,
+    kind: 'post-message',
+    captured,
+  };
+  for (const port of ports) port.postMessage(payload);
+}
 
 async function routeCaptureMessage(message: CaptureTransportMessage, sender: chrome.runtime.MessageSender): Promise<void> {
   const tabId = sender.tab?.id;

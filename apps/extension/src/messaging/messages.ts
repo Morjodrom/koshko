@@ -83,6 +83,7 @@ export type PanelToBackgroundControlMessage = PanelHeartbeatMessage;
 
 export type BackgroundMessage =
   | CaptureTransportMessage
+  | import('../user-event-tracking').UserEventMessage
   | ActivateOriginMessage
   | ReconcilePermissionsMessage;
 

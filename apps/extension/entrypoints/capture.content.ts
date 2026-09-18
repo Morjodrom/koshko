@@ -1,6 +1,7 @@
 import { defineContentScript } from 'wxt/sandbox';
 import { injectScript } from 'wxt/client';
 import { startCapture } from '../src/capture';
+import { startUserEventTracking } from '../src/user-event-capture';
 
 export default defineContentScript({
   // Runtime registration supplies the granted origins. WXT's development
@@ -11,6 +12,7 @@ export default defineContentScript({
   registration: 'runtime',
   main() {
     startCapture();
+    void startUserEventTracking();
     void injectScript('/console-capture.js').catch(() => {});
   },
 });
