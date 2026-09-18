@@ -33,14 +33,8 @@ describe('window capture', () => {
       },
     });
 
-    expect(sendMessage).toHaveBeenNthCalledWith(1, expect.objectContaining({
-      type: PANEL_MESSAGE_CAPTURE,
-      kind: 'post-message',
-      sequence: 1,
-      source: 'self',
-      data: expect.objectContaining({ type: 'signal' }),
-    }));
-    expect(sendMessage).toHaveBeenNthCalledWith(2, expect.objectContaining({
+    expect(sendMessage).toHaveBeenCalledTimes(1);
+    expect(sendMessage).toHaveBeenCalledWith(expect.objectContaining({
       type: PANEL_MESSAGE_CAPTURE,
       kind: 'signal',
       signal: expect.objectContaining({ id: 'signal-1', name: 'host.ready' }),
@@ -163,6 +157,7 @@ describe('window capture', () => {
       },
     });
 
+    expect(sendMessage).toHaveBeenCalledTimes(1);
     expect(sendMessage).toHaveBeenCalledWith(expect.objectContaining({
       type: PANEL_MESSAGE_CAPTURE,
       kind: 'state-mutation',
@@ -201,6 +196,7 @@ describe('window capture', () => {
       },
     });
 
+    expect(sendMessage).toHaveBeenCalledTimes(1);
     expect(sendMessage).toHaveBeenCalledWith(expect.objectContaining({
       type: PANEL_MESSAGE_CAPTURE,
       kind: 'error',
@@ -241,9 +237,8 @@ describe('window capture', () => {
 
     dispatchSelfMessage(validSignalMessage());
 
-    expect(sendMessage).toHaveBeenCalledTimes(2);
-    expect(sendMessage).toHaveBeenNthCalledWith(1, expect.objectContaining({ kind: 'post-message' }));
-    expect(sendMessage).toHaveBeenNthCalledWith(2, expect.objectContaining({ kind: 'signal' }));
+    expect(sendMessage).toHaveBeenCalledTimes(1);
+    expect(sendMessage).toHaveBeenCalledWith(expect.objectContaining({ kind: 'signal' }));
   });
 });
 

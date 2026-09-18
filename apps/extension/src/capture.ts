@@ -25,14 +25,43 @@ export function startCapture(): () => void {
     try {
       const observedAt = Date.now();
       const iframeElementId = getIframeElementId();
+      const messageSequence = ++sequence;
+      const source = classifySource(event.source);
+      const parsed = source === 'self'
+        ? parseKoshkoProtocolWindowMessageV1(event.data)
+        : null;
+
+      // Protocol envelopes are routed as semantic captures below. Do not also
+      // retain their transport representation as a generic post-message: the
+      // two records describe the same application event.
+      if (parsed && source === 'self') {
+        const metadata = {
+          observedAt,
+          navigationId,
+          frameUrl: location.href,
+          frameOrigin: location.origin,
+          ...(iframeElementId === undefined ? {} : { iframeElementId }),
+        };
+        let payload: CaptureTransportMessage;
+        if (parsed.type === 'signal') {
+          payload = { type: PANEL_MESSAGE_CAPTURE, kind: 'signal', signal: parsed.signal, ...metadata };
+        } else if (parsed.type === 'error') {
+          payload = { type: PANEL_MESSAGE_CAPTURE, kind: 'error', error: parsed.error, ...metadata };
+        } else {
+          payload = { type: PANEL_MESSAGE_CAPTURE, kind: 'state-mutation', mutation: parsed.mutation, ...metadata };
+        }
+        void chrome.runtime.sendMessage(payload).catch(() => {});
+        return;
+      }
+
       const raw = {
         type: PANEL_MESSAGE_CAPTURE,
         kind: 'post-message' as const,
         id: createMessageId(),
-        sequence: ++sequence,
+        sequence: messageSequence,
         observedAt,
         origin: typeof event.origin === 'string' ? event.origin : '',
-        source: classifySource(event.source),
+        source,
         data: normalizePostMessageData(event.data),
         navigationId,
         frameUrl: location.href,
@@ -40,26 +69,6 @@ export function startCapture(): () => void {
         ...(iframeElementId === undefined ? {} : { iframeElementId }),
       };
       void chrome.runtime.sendMessage(raw).catch(() => {});
-
-      if (raw.source !== 'self') return;
-      const parsed = parseKoshkoProtocolWindowMessageV1(event.data);
-      if (!parsed) return;
-      const metadata = {
-        observedAt,
-        navigationId,
-        frameUrl: location.href,
-        frameOrigin: location.origin,
-        ...(iframeElementId === undefined ? {} : { iframeElementId }),
-      };
-      let payload: CaptureTransportMessage;
-      if (parsed.type === 'signal') {
-        payload = { type: PANEL_MESSAGE_CAPTURE, kind: 'signal', signal: parsed.signal, ...metadata };
-      } else if (parsed.type === 'error') {
-        payload = { type: PANEL_MESSAGE_CAPTURE, kind: 'error', error: parsed.error, ...metadata };
-      } else {
-        payload = { type: PANEL_MESSAGE_CAPTURE, kind: 'state-mutation', mutation: parsed.mutation, ...metadata };
-      }
-      void chrome.runtime.sendMessage(payload).catch(() => {});
     } catch {
       // A hostile MessageEvent must never affect the inspected application.
     }
