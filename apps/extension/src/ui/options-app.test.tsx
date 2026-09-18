@@ -16,7 +16,6 @@ import {
   EXTENSION_MESSAGE_RULES_STORAGE_KEY,
   defaultExtensionMessageRulesConfig,
 } from '../extension-message-rules';
-import { USER_EVENT_TRACKING_STORAGE_KEY } from '../user-event-tracking';
 
 describe('OptionsApp', () => {
   let origins: string[];
@@ -25,7 +24,6 @@ describe('OptionsApp', () => {
   let set: ReturnType<typeof vi.fn>;
   let sendMessage: ReturnType<typeof vi.fn>;
   let storedRules: unknown;
-  let userEventTrackingEnabled: boolean;
   let storageChangeListener: ((
     changes: Record<string, chrome.storage.StorageChange>,
     areaName: string,
@@ -36,7 +34,6 @@ describe('OptionsApp', () => {
   beforeEach(() => {
     origins = [];
     storedRules = undefined;
-    userEventTrackingEnabled = false;
     storageChangeListener = undefined;
     request = vi.fn().mockResolvedValue(true);
     remove = vi.fn(async (permission: { origins: string[] }) => {
@@ -46,9 +43,6 @@ describe('OptionsApp', () => {
     });
     set = vi.fn(async (value: Record<string, unknown>) => {
       if (Array.isArray(value[STORAGE_KEY])) origins = value[STORAGE_KEY] as string[];
-      if (USER_EVENT_TRACKING_STORAGE_KEY in value) {
-        userEventTrackingEnabled = value[USER_EVENT_TRACKING_STORAGE_KEY] === true;
-      }
       if (EXTENSION_MESSAGE_RULES_STORAGE_KEY in value) {
         storedRules = value[EXTENSION_MESSAGE_RULES_STORAGE_KEY];
       }
@@ -72,7 +66,6 @@ describe('OptionsApp', () => {
             get: vi.fn(async (defaults: Record<string, unknown>) => ({
               ...defaults,
               [STORAGE_KEY]: origins,
-              [USER_EVENT_TRACKING_STORAGE_KEY]: userEventTrackingEnabled,
               ...(storedRules === undefined ? {} : {
                 [EXTENSION_MESSAGE_RULES_STORAGE_KEY]: storedRules,
               }),
@@ -248,16 +241,6 @@ describe('OptionsApp', () => {
 
     expect(await screen.findByDisplayValue('React DevTools')).toBeTruthy();
     expect(screen.getByDisplayValue('PIXI DevTools')).toBeTruthy();
-  });
-
-  it('keeps page interaction tracking disabled until the user explicitly enables it', async () => {
-    render(<OptionsApp />);
-    const control = await screen.findByRole('checkbox', { name: 'Enable page interaction tracking' });
-
-    expect((control as HTMLInputElement).checked).toBe(false);
-    fireEvent.click(control);
-
-    await waitFor(() => expect(set).toHaveBeenCalledWith({ [USER_EVENT_TRACKING_STORAGE_KEY]: true }));
   });
 
 });

@@ -47,6 +47,11 @@ import {
   getStoredExtensionMessageRules,
   subscribeToStoredExtensionMessageRules,
 } from '../extension-message-rules';
+import {
+  getUserEventTrackingEnabled,
+  setUserEventTrackingEnabled,
+  USER_EVENT_TRACKING_STORAGE_KEY,
+} from '../user-event-tracking';
 
 export interface PanelAppProps {
   repository: KoshkoRepository;
@@ -104,6 +109,7 @@ export function PanelApp({
   );
   const [logQuery, setLogQuery] = useState('');
   const [parseJsonStrings, setParseJsonStrings] = useState(false);
+  const [userEventTrackingEnabled, setUserEventTrackingEnabledState] = useState(false);
   const [selectedActorKeys, setSelectedActorKeys] = useState<ReadonlySet<string>>(
     () => new Set(getActorColumns(repository.getDisplayLog()).map((actor) => actor.key)),
   );
@@ -138,6 +144,33 @@ export function PanelApp({
       unsubscribe();
     };
   }, [repository]);
+
+  useEffect(() => {
+    let mounted = true;
+    if (typeof chrome === 'undefined' || !chrome.storage?.local) {
+      return () => {
+        mounted = false;
+      };
+    }
+    void getUserEventTrackingEnabled().then((enabled) => {
+      if (mounted) setUserEventTrackingEnabledState(enabled);
+    });
+    const onStorageChange = (
+      changes: Record<string, chrome.storage.StorageChange>,
+      areaName: string,
+    ): void => {
+      if (areaName === 'local' && changes[USER_EVENT_TRACKING_STORAGE_KEY]) {
+        setUserEventTrackingEnabledState(
+          changes[USER_EVENT_TRACKING_STORAGE_KEY].newValue === true,
+        );
+      }
+    };
+    chrome.storage.onChanged.addListener(onStorageChange);
+    return () => {
+      mounted = false;
+      chrome.storage.onChanged.removeListener(onStorageChange);
+    };
+  }, []);
 
   useEffect(() => {
     let mounted = true;
@@ -355,6 +388,19 @@ export function PanelApp({
               onChange={(event) => setParseJsonStrings(event.target.checked)}
             />
             Parse JSON strings
+          </label>
+          <label className="toolbar-toggle">
+            <input
+              type="checkbox"
+              aria-label="Enable page interaction tracking"
+              checked={userEventTrackingEnabled}
+              onChange={(event) => {
+                const enabled = event.target.checked;
+                setUserEventTrackingEnabledState(enabled);
+                void setUserEventTrackingEnabled(enabled);
+              }}
+            />
+            Track interactions
           </label>
           <label className="toolbar-toggle">
             <input

@@ -27,6 +27,7 @@ import {
   EXTENSION_MESSAGE_RULES_STORAGE_KEY,
   defaultExtensionMessageRulesConfig,
 } from '../extension-message-rules';
+import { USER_EVENT_TRACKING_STORAGE_KEY } from '../user-event-tracking';
 
 class FakePanelConnection implements ManagedPanelConnection {
   private readonly messageListeners = new Set<
@@ -229,10 +230,78 @@ function expandGlobalState(): HTMLElement {
   return tree;
 }
 
+function stubTrackingStorage(initialEnabled: boolean): {
+  set: ReturnType<typeof vi.fn>;
+  emitTrackingChange: (enabled: boolean) => void;
+} {
+  const listeners = new Set<(
+    changes: Record<string, chrome.storage.StorageChange>,
+    areaName: string,
+  ) => void>();
+  const set = vi.fn().mockResolvedValue(undefined);
+  vi.stubGlobal('chrome', {
+    storage: {
+      local: {
+        get: vi.fn(async (defaults: Record<string, unknown>) => ({
+          ...defaults,
+          [USER_EVENT_TRACKING_STORAGE_KEY]: initialEnabled,
+        })),
+        set,
+      },
+      onChanged: {
+        addListener: vi.fn((listener) => listeners.add(listener)),
+        removeListener: vi.fn((listener) => listeners.delete(listener)),
+      },
+    },
+  });
+  return {
+    set,
+    emitTrackingChange(enabled) {
+      for (const listener of listeners) {
+        listener({
+          [USER_EVENT_TRACKING_STORAGE_KEY]: {
+            oldValue: !enabled,
+            newValue: enabled,
+          },
+        }, 'local');
+      }
+    },
+  };
+}
+
 describe('PanelApp', () => {
   afterEach(() => {
     cleanup();
     vi.unstubAllGlobals();
+  });
+
+  it('persists page interaction tracking from the panel toolbar', async () => {
+    const storage = stubTrackingStorage(false);
+    mountPanel();
+    const control = await screen.findByRole('checkbox', {
+      name: 'Enable page interaction tracking',
+    });
+
+    expect((control as HTMLInputElement).checked).toBe(false);
+    fireEvent.click(control);
+
+    expect((control as HTMLInputElement).checked).toBe(true);
+    await waitFor(() => expect(storage.set).toHaveBeenCalledWith({
+      [USER_EVENT_TRACKING_STORAGE_KEY]: true,
+    }));
+  });
+
+  it('loads and synchronizes the persisted page interaction tracking setting', async () => {
+    const storage = stubTrackingStorage(true);
+    mountPanel();
+    const control = await screen.findByRole('checkbox', {
+      name: 'Enable page interaction tracking',
+    });
+
+    await waitFor(() => expect((control as HTMLInputElement).checked).toBe(true));
+    act(() => storage.emitTrackingChange(false));
+
+    await waitFor(() => expect((control as HTMLInputElement).checked).toBe(false));
   });
 
   it('grants the inspected site explicitly and explains missed startup events', async () => {
@@ -824,10 +893,10 @@ describe('PanelApp', () => {
   });
 
   it('reclassifies retained messages when stored rules change', async () => {
-    let storageListener: ((
+    const storageListeners = new Set<(
       changes: Record<string, chrome.storage.StorageChange>,
       areaName: string,
-    ) => void) | undefined;
+    ) => void>();
     const get = vi.fn(async () => ({
       [EXTENSION_MESSAGE_RULES_STORAGE_KEY]: defaultExtensionMessageRulesConfig(),
     }));
@@ -835,8 +904,10 @@ describe('PanelApp', () => {
       storage: {
         local: { get },
         onChanged: {
-          addListener: (listener: typeof storageListener) => { storageListener = listener; },
-          removeListener: vi.fn(),
+          addListener: (listener: (changes: Record<string, chrome.storage.StorageChange>, areaName: string) => void) => {
+            storageListeners.add(listener);
+          },
+          removeListener: vi.fn((listener) => storageListeners.delete(listener)),
         },
       },
     });
@@ -845,21 +916,25 @@ describe('PanelApp', () => {
     act(() => port.emitPostMessage(capturedPostMessage({ data: { bridge: { tool: 'custom' } } })));
     expect(screen.getByTestId('capture-status').textContent).toContain('1 entry shown');
 
-    act(() => storageListener?.({
-      [EXTENSION_MESSAGE_RULES_STORAGE_KEY]: {
-        newValue: {
-          version: 1,
-          rules: [{
-            id: 'custom',
-            name: 'Custom Extension',
-            enabled: true,
-            path: 'bridge.tool',
-            operator: 'equals',
-            value: 'custom',
-          }],
-        },
-      },
-    }, 'local'));
+    act(() => {
+      for (const listener of storageListeners) {
+        listener({
+          [EXTENSION_MESSAGE_RULES_STORAGE_KEY]: {
+            newValue: {
+              version: 1,
+              rules: [{
+                id: 'custom',
+                name: 'Custom Extension',
+                enabled: true,
+                path: 'bridge.tool',
+                operator: 'equals',
+                value: 'custom',
+              }],
+            },
+          },
+        }, 'local');
+      }
+    });
 
     expect(screen.getByTestId('capture-status').textContent).toContain('0 entries shown · 1 extensions hidden');
   });

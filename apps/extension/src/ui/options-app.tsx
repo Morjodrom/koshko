@@ -18,18 +18,12 @@ import {
   type ExtensionMessageRuleScalar,
 } from '../extension-message-rules';
 import { BrandLockup, Icon } from './brand';
-import {
-  getUserEventTrackingEnabled,
-  setUserEventTrackingEnabled,
-  USER_EVENT_TRACKING_STORAGE_KEY,
-} from '../user-event-tracking';
 
 export function OptionsApp(): ReactElement {
   const [origins, setOrigins] = useState<string[]>([]);
   const [input, setInput] = useState('');
   const [status, setStatus] = useState('');
   const [rulesStatus, setRulesStatus] = useState('');
-  const [userEventTrackingEnabled, setUserEventTrackingEnabledState] = useState(false);
   const [rules, setRules] = useState<ExtensionMessageRule[]>(() =>
     [...defaultExtensionMessageRulesConfig().rules],
   );
@@ -39,18 +33,11 @@ export function OptionsApp(): ReactElement {
   useEffect(() => {
     void refreshOrigins();
     void getStoredExtensionMessageRules().then((config) => setRules(config.rules));
-    void getUserEventTrackingEnabled().then(setUserEventTrackingEnabledState);
     const onPermissionChange = (): void => {
       void refreshOrigins();
     };
     chrome.permissions.onAdded.addListener(onPermissionChange);
     chrome.permissions.onRemoved.addListener(onPermissionChange);
-    const onStorageChange = (changes: Record<string, chrome.storage.StorageChange>, areaName: string): void => {
-      if (areaName === 'local' && changes[USER_EVENT_TRACKING_STORAGE_KEY]) {
-        setUserEventTrackingEnabledState(changes[USER_EVENT_TRACKING_STORAGE_KEY].newValue === true);
-      }
-    };
-    chrome.storage.onChanged.addListener(onStorageChange);
     const unsubscribeRules = chrome.storage.onChanged
       ? subscribeToStoredExtensionMessageRules((config) => setRules(config.rules))
       : () => undefined;
@@ -58,7 +45,6 @@ export function OptionsApp(): ReactElement {
     return () => {
       chrome.permissions.onAdded.removeListener(onPermissionChange);
       chrome.permissions.onRemoved.removeListener(onPermissionChange);
-      chrome.storage.onChanged.removeListener(onStorageChange);
       unsubscribeRules();
     };
   }, []);
@@ -198,26 +184,6 @@ export function OptionsApp(): ReactElement {
             ))
           )}
         </ul>
-      </section>
-      <section className="card">
-        <div className="section-header">
-          <div>
-            <h2>Page interaction tracking</h2>
-            <p className="muted">When enabled, Koshko records page opens plus click, change, and submit metadata. It never records typed values or field contents.</p>
-          </div>
-          <label>
-            <input
-              aria-label="Enable page interaction tracking"
-              type="checkbox"
-              checked={userEventTrackingEnabled}
-              onChange={(event) => {
-                const enabled = event.target.checked;
-                setUserEventTrackingEnabledState(enabled);
-                void setUserEventTrackingEnabled(enabled);
-              }}
-            /> Enable tracking
-          </label>
-        </div>
       </section>
       <section className="card message-rules">
         <div className="section-header">
