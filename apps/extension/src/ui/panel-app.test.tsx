@@ -27,7 +27,10 @@ import {
   EXTENSION_MESSAGE_RULES_STORAGE_KEY,
   defaultExtensionMessageRulesConfig,
 } from '../extension-message-rules';
-import { USER_EVENT_TRACKING_STORAGE_KEY } from '../user-event-tracking';
+import {
+  USER_EVENT_TRACKING_STORAGE_KEY,
+  type CapturedUserEvent,
+} from '../user-event-tracking';
 
 class FakePanelConnection implements ManagedPanelConnection {
   private readonly messageListeners = new Set<
@@ -69,6 +72,12 @@ class FakePanelConnection implements ManagedPanelConnection {
   emitPostMessage(captured: CapturedPostMessage): void {
     for (const listener of this.messageListeners) {
       listener({ type: PANEL_MESSAGE_CAPTURE, kind: 'post-message', captured });
+    }
+  }
+
+  emitEvent(captured: CapturedUserEvent): void {
+    for (const listener of this.messageListeners) {
+      listener({ type: PANEL_MESSAGE_CAPTURE, kind: 'event', captured });
     }
   }
 
@@ -169,6 +178,23 @@ function capturedPostMessage(overrides: Partial<CapturedPostMessage> = {}): Capt
     origin: 'https://sender.example.test',
     source: 'parent',
     data: { action: 'checkout.ready', token: '[Redacted]' },
+    tabId: 17,
+    frameId: 0,
+    navigationId: 'navigation-1',
+    frameUrl: 'https://demo.example.test',
+    frameOrigin: 'https://demo.example.test',
+    ...overrides,
+  };
+}
+
+function capturedUserEvent(overrides: Partial<CapturedUserEvent> = {}): CapturedUserEvent {
+  return {
+    kind: 'event',
+    id: 'user-event-1',
+    sequence: 1,
+    observedAt: Date.parse('2026-09-05T12:34:56.790Z'),
+    eventType: 'click',
+    target: { tagName: 'button', path: ['button', 'x-control', 'body', 'html'], role: 'tab' },
     tabId: 17,
     frameId: 0,
     navigationId: 'navigation-1',
@@ -709,6 +735,44 @@ describe('PanelApp', () => {
     expect(repository.getDisplayState()).toEqual({});
     expect(repository.exportJsonl()).toContain('console-error-1');
     expect(repository.exportJsonl()).toContain('"errorCount":1');
+  });
+
+  it('shows first-class user events with semantic deepest-target names', () => {
+    const { port, repository } = mountPanel();
+
+    act(() => {
+      port.emitEvent(capturedUserEvent());
+      port.emitEvent(capturedUserEvent({
+        id: 'user-event-page-open',
+        sequence: 2,
+        eventType: 'page-open',
+        target: undefined,
+      }));
+    });
+
+    const timeline = screen.getByTestId('timeline');
+    expect(timeline.textContent).toContain('Event');
+    expect(timeline.textContent).toContain('click · button[role=tab]');
+    expect(timeline.textContent).not.toContain('click · html');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Log' }));
+    expect((screen.getByRole('checkbox', { name: 'Event' }) as HTMLInputElement).checked).toBe(true);
+    const rows = document.querySelectorAll<HTMLElement>('[data-log-entry-type="event"]');
+    expect(rows).toHaveLength(2);
+    expect(rows[0].textContent).toContain('Event click · button[role=tab]');
+    expect(rows[1].textContent).toContain('Event page-open');
+
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Event' }));
+    expect(document.querySelectorAll('[data-log-entry-type="event"]')).toHaveLength(0);
+
+    fireEvent.click(screen.getByRole('button', { name: 'AI Log' }));
+    const aiLog = screen.getByRole('textbox', { name: 'AI-ready Koshko log' }) as HTMLTextAreaElement;
+    expect(aiLog.value).toContain('"kind":"event"');
+    expect(aiLog.value).toContain('"eventType":"click"');
+
+    const [metadata, ...entries] = repository.exportJsonl().split('\n').map((line) => JSON.parse(line));
+    expect(metadata).toMatchObject({ count: 2, eventCount: 2, postMessageCount: 0 });
+    expect(entries.every((entry) => entry.kind === 'event')).toBe(true);
   });
 
   it('shows postMessages as searchable actor-independent log, AI, and export entries', () => {

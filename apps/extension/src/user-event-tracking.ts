@@ -11,6 +11,21 @@ export interface UserEventTarget {
   inputType?: string;
 }
 
+export interface CapturedUserEvent {
+  kind: 'event';
+  id: string;
+  sequence: number;
+  observedAt: number;
+  eventType: UserEventType;
+  target?: UserEventTarget;
+  tabId: number;
+  frameId: number;
+  documentId?: string;
+  navigationId: string;
+  frameUrl: string;
+  frameOrigin: string;
+}
+
 export interface UserEventMessage {
   type: typeof USER_EVENT_MESSAGE;
   version: typeof USER_EVENT_TRACKING_VERSION;
@@ -21,6 +36,45 @@ export interface UserEventMessage {
   navigationId: string;
   frameUrl: string;
   frameOrigin: string;
+}
+
+export function normalizeCapturedUserEvent(input: unknown): CapturedUserEvent | undefined {
+  if (!input || typeof input !== 'object') return undefined;
+  const record = input as Record<string, unknown>;
+  if (record.kind !== 'event'
+    || !isNonEmptyText(record.id, 256) || !isPositiveSafeInteger(record.sequence)
+    || !isSafeTimestamp(record.observedAt) || !isUserEventType(record.eventType)
+    || !isSafeNonNegativeInteger(record.tabId) || !Number.isInteger(record.frameId)
+    || !isNonEmptyText(record.navigationId, 160) || !isNonEmptyText(record.frameUrl, 4_096)
+    || !isNonEmptyText(record.frameOrigin, 1_024)) return undefined;
+  if (record.documentId !== undefined && !isNonEmptyText(record.documentId, 256)) return undefined;
+  const target = record.target === undefined ? undefined : parseUserEventTarget(record.target);
+  if (record.target !== undefined && !target) return undefined;
+
+  return {
+    kind: 'event',
+    id: record.id as string,
+    sequence: record.sequence as number,
+    observedAt: record.observedAt as number,
+    eventType: record.eventType as UserEventType,
+    ...(target ? { target } : {}),
+    tabId: record.tabId as number,
+    frameId: record.frameId as number,
+    ...(typeof record.documentId === 'string' ? { documentId: record.documentId } : {}),
+    navigationId: record.navigationId as string,
+    frameUrl: record.frameUrl as string,
+    frameOrigin: record.frameOrigin as string,
+  };
+}
+
+export function getUserEventDisplayName(eventType: UserEventType, target?: UserEventTarget): string {
+  if (!target) return eventType;
+  const qualifier = target.role
+    ? `[role=${target.role}]`
+    : target.inputType
+      ? `[type=${target.inputType}]`
+      : '';
+  return `${eventType} · ${target.tagName}${qualifier}`;
 }
 
 export function isUserEventTrackingEnabled(value: unknown): boolean {
@@ -111,6 +165,10 @@ function isUserEventType(value: unknown): value is UserEventType {
 
 function isSafeTimestamp(value: unknown): value is number {
   return typeof value === 'number' && Number.isSafeInteger(value) && value > 0;
+}
+
+function isSafeNonNegativeInteger(value: unknown): value is number {
+  return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0;
 }
 
 function isPositiveSafeInteger(value: unknown): value is number {

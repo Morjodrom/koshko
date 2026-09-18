@@ -6,6 +6,7 @@ import type {
 import { describe, expect, it } from 'vitest';
 import { formatAiLog, type AiLogBudget } from './ai-log';
 import type { CapturedPostMessage } from './post-message';
+import type { CapturedUserEvent } from './user-event-tracking';
 
 function signal(
   id: string,
@@ -107,6 +108,28 @@ function postMessage(
     origin: 'https://sender.example.test',
     source: 'parent',
     data: { action: 'checkout.ready' },
+    tabId: 17,
+    frameId: 0,
+    documentId: 'document-1',
+    navigationId: 'navigation-1',
+    frameUrl: 'https://demo.example.test/checkout',
+    frameOrigin: 'https://demo.example.test',
+    ...overrides,
+  };
+}
+
+function userEvent(
+  id: string,
+  observedAt: number,
+  overrides: Partial<CapturedUserEvent> = {},
+): CapturedUserEvent {
+  return {
+    kind: 'event',
+    id,
+    sequence: observedAt,
+    observedAt,
+    eventType: 'click',
+    target: { tagName: 'button', path: ['button', 'html'], role: 'tab' },
     tabId: 17,
     frameId: 0,
     documentId: 'document-1',
@@ -249,6 +272,27 @@ describe('formatAiLog', () => {
       origin: 'https://sender.example.test',
       source: 'parent',
       data: { action: 'checkout.ready' },
+      frame: expect.any(String),
+      producer: expect.any(String),
+      seq: 1005,
+    });
+    expect(result.includedEntryCount).toBe(1);
+  });
+
+  it('emits user events as first-class frame-scoped evidence', () => {
+    const result = formatAiLog({
+      entries: [userEvent('user-event-1', 1_005)],
+      state: {},
+      budget: 'full',
+    });
+    const records = dataRecords(result.text);
+
+    expect(records.find((record) => record.kind === 'event')).toMatchObject({
+      kind: 'event',
+      e: 'e1',
+      t: 0,
+      eventType: 'click',
+      target: { tagName: 'button', path: ['button', 'html'], role: 'tab' },
       frame: expect.any(String),
       producer: expect.any(String),
       seq: 1005,

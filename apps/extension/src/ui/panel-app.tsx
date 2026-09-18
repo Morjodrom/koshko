@@ -22,6 +22,7 @@ import {
   getTimelineActors,
   isCapturedError,
   isCapturedPostMessage,
+  isCapturedUserEvent,
   isCapturedSignal,
   type KoshkoLogEntry,
   type KoshkoStateSnapshot,
@@ -49,6 +50,7 @@ import {
 } from '../extension-message-rules';
 import {
   getUserEventTrackingEnabled,
+  getUserEventDisplayName,
   setUserEventTrackingEnabled,
   USER_EVENT_TRACKING_STORAGE_KEY,
 } from '../user-event-tracking';
@@ -114,7 +116,7 @@ export function PanelApp({
     () => new Set(getActorColumns(repository.getDisplayLog()).map((actor) => actor.key)),
   );
   const [selectedLogTypes, setSelectedLogTypes] = useState<ReadonlySet<LogEntryType>>(
-    new Set(['signal', 'error', 'post-message']),
+    new Set(['signal', 'error', 'post-message', 'event']),
   );
   const [aiLogBudget, setAiLogBudget] = useState<AiLogBudget>('16k');
   const [expandedEntryIds, setExpandedEntryIds] = useState<
@@ -840,7 +842,7 @@ function GlobalState({
   );
 }
 
-type LogEntryType = 'signal' | 'error' | 'state' | 'post-message';
+type LogEntryType = 'signal' | 'error' | 'state' | 'post-message' | 'event';
 
 function Log({
   entries,
@@ -866,7 +868,7 @@ function Log({
   parseJsonStrings: boolean;
 }): ReactElement {
   const emptyMessage = capturedEntryCount === 0
-    ? ['No log entries yet.', 'Captured signals, browser errors, state mutations, and postMessages will appear here.']
+    ? ['No log entries yet.', 'Captured signals, browser errors, state mutations, postMessages, and events will appear here.']
     : ['No log entries match the current filters.', 'Adjust the search or filters to show captured entries.'];
 
   return (
@@ -888,6 +890,7 @@ function Log({
           <label><input type="checkbox" checked={selectedTypes.has('error')} onChange={() => onTypeToggle('error')} /> Error</label>
           <label><input type="checkbox" checked={selectedTypes.has('state')} onChange={() => onTypeToggle('state')} /> State</label>
           <label><input type="checkbox" checked={selectedTypes.has('post-message')} onChange={() => onTypeToggle('post-message')} /> Message</label>
+          <label><input type="checkbox" checked={selectedTypes.has('event')} onChange={() => onTypeToggle('event')} /> Event</label>
         </fieldset>
         <fieldset className="log-filter-group">
           <legend>Actors</legend>
@@ -915,7 +918,7 @@ function Log({
           ? 'Signal'
           : entryType === 'error'
             ? 'Error'
-            : entryType === 'post-message' ? 'PostMessage' : 'State';
+            : entryType === 'post-message' ? 'PostMessage' : entryType === 'event' ? 'Event' : 'State';
         const metadata = getLogEntryMetadata(entry);
         const source = getLogEntrySource(entry);
         const payload = getLogEntryPayload(entry);
@@ -957,7 +960,7 @@ function Log({
 }
 
 function matchesSelectedActor(entry: KoshkoLogEntry, selectedActorKeys: ReadonlySet<string>): boolean {
-  if (isCapturedPostMessage(entry)) return true;
+  if (isCapturedPostMessage(entry) || isCapturedUserEvent(entry)) return true;
   if (isCapturedSignal(entry)) {
     return selectedActorKeys.has(actorKey(entry.signal.source))
       || (entry.signal.target !== undefined && selectedActorKeys.has(actorKey(entry.signal.target)));
@@ -968,7 +971,9 @@ function matchesSelectedActor(entry: KoshkoLogEntry, selectedActorKeys: Readonly
 function getLogEntryType(entry: KoshkoLogEntry): LogEntryType {
   if (isCapturedSignal(entry)) return 'signal';
   if (isCapturedError(entry)) return 'error';
-  return isCapturedPostMessage(entry) ? 'post-message' : 'state';
+  if (isCapturedPostMessage(entry)) return 'post-message';
+  if (isCapturedUserEvent(entry)) return 'event';
+  return 'state';
 }
 
 function getLogEntryMetadata(entry: KoshkoLogEntry): {
@@ -977,7 +982,7 @@ function getLogEntryMetadata(entry: KoshkoLogEntry): {
 } {
   if (isCapturedSignal(entry)) return entry.signal;
   if (isCapturedError(entry)) return entry.error;
-  if (isCapturedPostMessage(entry)) {
+  if (isCapturedPostMessage(entry) || isCapturedUserEvent(entry)) {
     return { id: entry.id, occurredAt: entry.observedAt };
   }
   return entry.mutation;
@@ -987,7 +992,12 @@ function getLogEntryName(entry: KoshkoLogEntry): string {
   if (isCapturedSignal(entry)) return entry.signal.name;
   if (isCapturedError(entry)) return getErrorDisplayMessage(entry.error);
   if (isCapturedPostMessage(entry)) return getPostMessageLogName(entry.data);
+  if (isCapturedUserEvent(entry)) return getUserEventLogName(entry);
   return entry.mutation.label ?? 'state mutation';
+}
+
+function getUserEventLogName(entry: import('../user-event-tracking').CapturedUserEvent): string {
+  return getUserEventDisplayName(entry.eventType, entry.target);
 }
 
 function getPostMessageLogName(data: JsonValue): string {
@@ -1014,6 +1024,13 @@ function getLogEntryPayload(entry: KoshkoLogEntry) {
       origin: entry.origin,
       source: entry.source,
       data: entry.data,
+    };
+  }
+  if (isCapturedUserEvent(entry)) {
+    return {
+      eventType: entry.eventType,
+      target: entry.target,
+      frameUrl: entry.frameUrl,
     };
   }
   return entry.mutation.patch;

@@ -125,6 +125,37 @@ describe('PanelConnection', () => {
     connection.dispose();
   });
 
+  it('forwards normalized first-class user events', () => {
+    vi.useFakeTimers();
+    const port = new FakePort();
+    const connection = new PanelConnection(() => port);
+    const received = vi.fn();
+    connection.subscribe(received);
+    port.emit({ type: PANEL_MESSAGE_READY });
+    port.emit({
+      type: 'koshko:capture',
+      kind: 'event',
+      captured: {
+        kind: 'event',
+        id: 'event-1',
+        sequence: 1,
+        observedAt: 10,
+        eventType: 'page-open',
+        tabId: 1,
+        frameId: 0,
+        navigationId: 'nav',
+        frameUrl: 'https://example.test',
+        frameOrigin: 'https://example.test',
+      },
+    });
+
+    expect(received).toHaveBeenCalledWith(expect.objectContaining({
+      kind: 'event',
+      captured: expect.objectContaining({ eventType: 'page-open' }),
+    }));
+    connection.dispose();
+  });
+
   it('retries a missing ready acknowledgement using the capped backoff sequence', () => {
     vi.useFakeTimers();
     const ports = Array.from({ length: 7 }, () => new FakePort());

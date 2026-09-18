@@ -5,6 +5,7 @@ import {
   PANEL_MESSAGE_READY,
 } from './messages';
 import { normalizeCapturedPostMessage } from '../post-message';
+import { normalizeCapturedUserEvent } from '../user-event-tracking';
 
 export const PANEL_HEARTBEAT_INTERVAL_MS = 20_000;
 export const PANEL_READY_TIMEOUT_MS = 5_000;
@@ -189,7 +190,13 @@ function parsePanelCaptureMessage(message: unknown): PanelCaptureMessage | undef
   const value = message as { type?: unknown; kind?: unknown; captured?: unknown };
   if (
     value.type !== PANEL_MESSAGE_CAPTURE
-    || (value.kind !== 'signal' && value.kind !== 'state-mutation' && value.kind !== 'error' && value.kind !== 'post-message')
+    || (
+      value.kind !== 'signal'
+      && value.kind !== 'state-mutation'
+      && value.kind !== 'error'
+      && value.kind !== 'post-message'
+      && value.kind !== 'event'
+    )
   ) return undefined;
   if (!value.captured || typeof value.captured !== 'object') return undefined;
   const captured = value.captured as { signal?: unknown; mutation?: unknown; error?: unknown };
@@ -202,6 +209,12 @@ function parsePanelCaptureMessage(message: unknown): PanelCaptureMessage | undef
     return captured.error && typeof captured.error === 'object'
       ? message as PanelCaptureMessage
       : undefined;
+  }
+  if (value.kind === 'event') {
+    const normalized = normalizeCapturedUserEvent(value.captured);
+    return normalized === undefined
+      ? undefined
+      : { type: PANEL_MESSAGE_CAPTURE, kind: 'event', captured: normalized };
   }
   if (value.kind === 'post-message') {
     const normalized = normalizeCapturedPostMessage(value.captured);

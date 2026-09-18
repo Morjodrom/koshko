@@ -99,6 +99,25 @@ function postMessageEntry(id = 'message-1'): CapturedPostMessage {
 }
 
 describe('createTimelineLayout', () => {
+  it('renders user events with semantic names on their frame lane', () => {
+    const event = {
+      kind: 'event' as const,
+      id: 'user-event-1', sequence: 1, observedAt: Date.parse('2026-09-05T12:34:57.789Z'),
+      eventType: 'click' as const,
+      target: { tagName: 'button', path: ['button', 'html'], role: 'tab' },
+      tabId: 17, frameId: 4, navigationId: 'navigation-1',
+      frameUrl: 'https://frame.example.test/checkout', frameOrigin: 'https://frame.example.test',
+    };
+    const result = createTimelineLayout({
+      entries: [event],
+      actors: [{ key: 'frame::4', kind: 'frame', frameId: 4, reference: { id: 'frame', instanceId: '4', label: '#checkout' } }],
+      expandedEntryIds: new Set(), selectedEntryId: null, toggleDetails: vi.fn(),
+    });
+    expect(result.nodes.find((node) => node.id === 'event:user-event-1')?.data).toMatchObject({
+      entryType: 'event', name: 'click · button[role=tab]', machineName: 'click',
+    });
+  });
+
   it('places postMessages on the receiving frame lane without edges', () => {
     const message = postMessageEntry();
     const result = createTimelineLayout({

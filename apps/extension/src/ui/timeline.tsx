@@ -71,6 +71,7 @@ const EventNode = memo(function EventNode({ data }: NodeProps<TimelineNode>): Re
         <span className="timeline-event-dot" aria-hidden="true" />
         {event.entryType === 'error' ? <span className="timeline-entry-kind error">Error</span> : null}
         {event.entryType === 'post-message' ? <span className="timeline-entry-kind post-message">PostMessage</span> : null}
+        {event.entryType === 'event' ? <span className="timeline-entry-kind event">Event</span> : null}
         <span>{event.name}</span>
       </button>
     </>

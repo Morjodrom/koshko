@@ -11,10 +11,12 @@ import {
   getErrorDisplayMessage,
   isCapturedError,
   isCapturedPostMessage,
+  isCapturedUserEvent,
   isCapturedSignal,
   type KoshkoTimelineActor,
   type KoshkoTimelineEntry,
 } from '../state/repository';
+import { getUserEventDisplayName } from '../user-event-tracking';
 import { formatJsonForDisplay } from './json-display';
 
 export const TIMELINE_LANE_WIDTH = 220;
@@ -32,7 +34,7 @@ export type TimelineSeverity = 'debug' | 'info' | 'success' | 'warning' | 'error
 export interface TimelineEventNodeData extends Record<string, unknown> {
   kind: 'event';
   entryId: string;
-  entryType: 'signal' | 'error' | 'post-message';
+  entryType: 'signal' | 'error' | 'post-message' | 'event';
   name: string;
   machineName: string;
   severity: TimelineSeverity;
@@ -117,13 +119,16 @@ export function createTimelineLayout({
   for (const [entryIndex, captured] of entries.entries()) {
     const isSignal = isCapturedSignal(captured);
     const isPostMessage = isCapturedPostMessage(captured);
-    if (isPostMessage) {
+    const isUserEvent = isCapturedUserEvent(captured);
+    if (isPostMessage || isUserEvent) {
       const frameKey = `frame::${captured.frameId}`;
       const frameIndex = actorIndexes.get(frameKey);
       if (frameIndex === undefined) continue;
       const eventId = `event:${captured.id}`;
       const selected = selectedEntryId === captured.id;
-      const directionLabel = `${captured.origin} · source ${captured.source} · ${new Date(captured.observedAt).toISOString()}`;
+      const directionLabel = isUserEvent
+        ? `${getUserEventName(captured)} · ${new Date(captured.observedAt).toISOString()}`
+        : `${captured.origin} · source ${captured.source} · ${new Date(captured.observedAt).toISOString()}`;
       nodes.push({
         id: eventId,
         type: 'timelineEvent',
@@ -138,13 +143,13 @@ export function createTimelineLayout({
         selectable: true,
         selected,
         ariaLabel: directionLabel,
-        className: 'timeline-flow-event entry-post-message severity-warning',
+        className: `timeline-flow-event entry-${isUserEvent ? 'event' : 'post-message'} severity-warning`,
         data: {
           kind: 'event',
           entryId: captured.id,
-          entryType: 'post-message',
-          name: 'window.postMessage',
-          machineName: 'window.postMessage',
+          entryType: isUserEvent ? 'event' : 'post-message',
+          name: isUserEvent ? getUserEventName(captured) : 'window.postMessage',
+          machineName: isUserEvent ? captured.eventType : 'window.postMessage',
           severity: 'warning',
           expanded: expandedEntryIds.has(captured.id),
           direction: 'internal',
@@ -156,7 +161,7 @@ export function createTimelineLayout({
         entryId: captured.id,
         top: rowTop + ROW_PADDING_TOP,
         time: formatTime(captured.observedAt),
-        source: `${captured.origin} · ${captured.source}`,
+        source: isUserEvent ? captured.eventType : `${captured.origin} · ${captured.source}`,
         title: directionLabel,
       });
       rowTop += TIMELINE_ROW_HEIGHT;
@@ -340,4 +345,8 @@ export function sourcePosition(direction: TimelineEventNodeData['direction']): P
 
 export function targetPosition(direction: TimelineTargetNodeData['direction']): Position {
   return direction === 'reverse' ? Position.Right : Position.Left;
+}
+
+function getUserEventName(entry: import('../user-event-tracking').CapturedUserEvent): string {
+  return getUserEventDisplayName(entry.eventType, entry.target);
 }

@@ -10,6 +10,7 @@ import {
   type KoshkoErrorV1,
 } from '@koshko/protocol';
 import type { CapturedPostMessage } from '../post-message';
+import type { CapturedUserEvent } from '../user-event-tracking';
 import {
   classifyExtensionPostMessage,
   defaultExtensionMessageRulesConfig,
@@ -34,7 +35,7 @@ export interface KoshkoFrameTimelineActor extends KoshkoTimelineActorBase {
 
 export type KoshkoTimelineActor = KoshkoSemanticTimelineActor | KoshkoFrameTimelineActor;
 
-export type KoshkoTimelineEntry = CapturedSignalV1 | CapturedErrorV1 | CapturedPostMessage;
+export type KoshkoTimelineEntry = CapturedSignalV1 | CapturedErrorV1 | CapturedPostMessage | CapturedUserEvent;
 export type KoshkoLogEntry = KoshkoTimelineEntry | CapturedStateMutationV1;
 
 export interface KoshkoStateSnapshot {
@@ -50,6 +51,8 @@ export class KoshkoRepository {
   private readonly capturedErrors: CapturedErrorV1[] = [];
 
   private readonly capturedPostMessages: CapturedPostMessage[] = [];
+
+  private readonly capturedEvents: CapturedUserEvent[] = [];
 
   private readonly capturedLog: KoshkoLogEntry[] = [];
 
@@ -194,6 +197,8 @@ export class KoshkoRepository {
       this.capturedErrors.push(captured);
     } else if (isCapturedPostMessage(captured)) {
       this.capturedPostMessages.push(captured);
+    } else if (isCapturedUserEvent(captured)) {
+      this.capturedEvents.push(captured);
     } else {
       const nextState = applyStateMutationPatch(this.state, captured.mutation.patch);
       if (nextState !== this.state) {
@@ -221,6 +226,7 @@ export class KoshkoRepository {
     this.capturedSignals.length = 0;
     this.capturedErrors.length = 0;
     this.capturedPostMessages.length = 0;
+    this.capturedEvents.length = 0;
     this.capturedLog.length = 0;
     this.displaySignals = [];
     this.displayTimelineEntries = [];
@@ -248,6 +254,7 @@ export class KoshkoRepository {
       ...this.capturedSignals,
       ...this.capturedErrors,
       ...this.capturedPostMessages,
+      ...this.capturedEvents,
     ].sort(compareCapturedLogEntries);
   }
 
@@ -260,6 +267,7 @@ export class KoshkoRepository {
       ...this.capturedSignals,
       ...this.capturedErrors,
       ...this.capturedPostMessages,
+      ...this.capturedEvents,
     ]).sort(compareCapturedLogEntries);
     const classifiedExtensionPostMessageCount = this.capturedPostMessages
       .filter((entry) => this.isExtensionMessage(entry)).length;
@@ -276,6 +284,7 @@ export class KoshkoRepository {
       signalCount: entries.filter(isCapturedSignal).length,
       errorCount: entries.filter(isCapturedError).length,
       postMessageCount: entries.filter(isCapturedPostMessage).length,
+      eventCount: entries.filter(isCapturedUserEvent).length,
       includedExtensionPostMessageCount,
       omittedExtensionPostMessageCount,
       exportedAt: new Date().toISOString(),
@@ -419,10 +428,10 @@ function getLogEntryMetadata(entry: KoshkoLogEntry): {
 } {
   if (isCapturedSignal(entry)) return entry.signal;
   if (isCapturedError(entry)) return entry.error;
-  if (isCapturedPostMessage(entry)) {
+  if (isCapturedPostMessage(entry) || isCapturedUserEvent(entry)) {
     return {
       id: entry.id,
-      producerId: 'window.post-message',
+      producerId: isCapturedUserEvent(entry) ? 'user-event' : 'window.post-message',
       producerSequence: entry.sequence,
       occurredAt: entry.observedAt,
     };
@@ -438,6 +447,10 @@ export function isCapturedSignal(
 
 export function isCapturedError(captured: KoshkoLogEntry): captured is CapturedErrorV1 {
   return 'error' in captured;
+}
+
+export function isCapturedUserEvent(captured: KoshkoLogEntry): captured is CapturedUserEvent {
+  return 'kind' in captured && captured.kind === 'event';
 }
 
 export function isCapturedPostMessage(
@@ -459,10 +472,11 @@ export function getErrorDisplayMessage(error: KoshkoErrorV1): string {
   return error.name;
 }
 
-function getCapturedEntryType(entry: KoshkoLogEntry): 'error' | 'post-message' | 'signal' | 'state' {
+function getCapturedEntryType(entry: KoshkoLogEntry): 'error' | 'post-message' | 'event' | 'signal' | 'state' {
   if (isCapturedSignal(entry)) return 'signal';
   if (isCapturedError(entry)) return 'error';
   if (isCapturedPostMessage(entry)) return 'post-message';
+  if (isCapturedUserEvent(entry)) return 'event';
   return 'state';
 }
 
@@ -489,7 +503,7 @@ export function getTimelineActors(entries: readonly KoshkoTimelineEntry[]): Kosh
   const actors = getActorColumns(entries);
   const seen = new Set(actors.map((actor) => actor.key));
   for (const entry of entries) {
-    if (!isCapturedPostMessage(entry)) continue;
+    if (!isCapturedPostMessage(entry) && !isCapturedUserEvent(entry)) continue;
     const frame = frameActor(entry);
     if (seen.has(frame.key)) continue;
     seen.add(frame.key);
@@ -498,12 +512,12 @@ export function getTimelineActors(entries: readonly KoshkoTimelineEntry[]): Kosh
   return actors;
 }
 
-export function frameActor(entry: CapturedPostMessage): KoshkoFrameTimelineActor {
+export function frameActor(entry: CapturedPostMessage | CapturedUserEvent): KoshkoFrameTimelineActor {
   const key = `frame::${entry.frameId}`;
   const compactUrl = compactFrameUrl(entry.frameUrl);
   const label = entry.frameId === 0
     ? compactUrl || `Frame ${entry.frameId}`
-    : entry.iframeElementId
+    : 'iframeElementId' in entry && entry.iframeElementId
       ? `#${entry.iframeElementId}`
       : compactUrl || `Frame ${entry.frameId}`;
   return {

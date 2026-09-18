@@ -190,7 +190,9 @@ button.ghost { background: transparent; }
 .timeline-entry-kind { padding: 1px 4px; border-radius: 999px; font-family: Inter, ui-sans-serif, system-ui, sans-serif; font-size: 8px; font-weight: 850; letter-spacing: .04em; text-transform: uppercase; }
 .timeline-entry-kind.error { background: color-mix(in srgb, #bd3a45 18%, var(--noir-surface-raised)); color: #bd3a45; }
 .timeline-entry-kind.post-message { background: color-mix(in srgb, #c17a1b 18%, var(--noir-surface-raised)); color: #9a5a0a; }
+.timeline-entry-kind.event { background: color-mix(in srgb, #3978b8 18%, var(--noir-surface-raised)); color: #28639e; }
 .timeline-flow-event.entry-post-message { --event-accent: #c17a1b; }
+.timeline-flow-event.entry-event { --event-accent: #3978b8; }
 .timeline-flow-handle { width: 7px; height: 7px; border: 0; background: var(--event-accent); pointer-events: none; }
 .timeline-flow-target { width: 10px !important; height: 10px !important; pointer-events: none; }
 .timeline-flow-target-handle { width: 10px; height: 10px; border: 2px solid var(--noir-surface-raised); background: var(--event-accent); box-shadow: 0 0 0 2px color-mix(in srgb, var(--event-accent) 28%, transparent); pointer-events: none; }
@@ -210,12 +212,14 @@ button.ghost { background: transparent; }
 .log-item { border: 1px solid var(--noir-line); border-radius: 10px; background: var(--noir-surface-raised); padding: 10px 12px; }
 .log-item.error { border-color: color-mix(in srgb, #bd3a45 58%, var(--noir-line)); background: color-mix(in srgb, #bd3a45 8%, var(--noir-surface-raised)); }
 .log-item.post-message { border-color: color-mix(in srgb, #c17a1b 52%, var(--noir-line)); background: color-mix(in srgb, #c17a1b 7%, var(--noir-surface-raised)); }
+.log-item.event { border-color: color-mix(in srgb, #3978b8 52%, var(--noir-line)); background: color-mix(in srgb, #3978b8 7%, var(--noir-surface-raised)); }
 .log-item summary { display: flex; align-items: center; justify-content: space-between; gap: 12px; cursor: pointer; }
 .log-summary-title { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-weight: 750; }
 .log-entry-kind { display: inline-block; margin-right: 4px; padding: 2px 6px; border-radius: 999px; background: var(--noir-accent-soft); color: var(--noir-accent); font-family: Inter, ui-sans-serif, system-ui, sans-serif; font-size: 10px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; }
 .log-entry-kind.state { background: color-mix(in srgb, var(--noir-muted) 18%, var(--noir-surface-raised)); color: var(--noir-muted); }
 .log-entry-kind.error { background: color-mix(in srgb, #bd3a45 18%, var(--noir-surface-raised)); color: #bd3a45; }
 .log-entry-kind.post-message { background: color-mix(in srgb, #c17a1b 18%, var(--noir-surface-raised)); color: #9a5a0a; }
+.log-entry-kind.event { background: color-mix(in srgb, #3978b8 18%, var(--noir-surface-raised)); color: #28639e; }
 .log-entry-source { color: var(--noir-muted); font-family: Inter, ui-sans-serif, system-ui, sans-serif; font-size: .78rem; font-weight: 650; }
 .log-entry-machine-name { color: #bd3a45; font-size: .72rem; font-weight: 650; }
 .log-item pre { margin-top: 12px; border-top: 1px solid var(--noir-line); padding-inline: 0; padding-bottom: 0; }

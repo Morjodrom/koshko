@@ -1,4 +1,5 @@
 import type { CapturedPostMessage, RawPostMessage } from '../post-message';
+import type { CapturedUserEvent } from '../user-event-tracking';
 
 export const STORAGE_KEY = 'koshko:origins';
 export const CONTENT_SCRIPT_ID_PREFIX = 'koshko-capture';
@@ -105,6 +106,12 @@ export interface PanelErrorCaptureMessage {
   captured: import('@koshko/protocol').CapturedErrorV1;
 }
 
+export interface PanelEventCaptureMessage {
+  type: typeof PANEL_MESSAGE_CAPTURE;
+  kind: 'event';
+  captured: CapturedUserEvent;
+}
+
 export interface PanelPostMessageCaptureMessage {
   type: typeof PANEL_MESSAGE_CAPTURE;
   kind: 'post-message';
@@ -115,7 +122,8 @@ export type PanelCaptureMessage =
   | PanelSignalCaptureMessage
   | PanelStateMutationCaptureMessage
   | PanelErrorCaptureMessage
-  | PanelPostMessageCaptureMessage;
+  | PanelPostMessageCaptureMessage
+  | PanelEventCaptureMessage;
 
 export function parseTabId(value: unknown): number | null {
   if (typeof value !== 'string' || !/^\d+$/.test(value)) return null;

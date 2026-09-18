@@ -3,9 +3,10 @@ import {
   USER_EVENT_MESSAGE,
   USER_EVENT_TRACKING_VERSION,
   getComposedPathTarget,
+  getUserEventDisplayName,
+  normalizeCapturedUserEvent,
   parseUserEventMessage,
 } from './user-event-tracking';
-import { normalizeCapturedPostMessage } from './post-message';
 import { KoshkoRepository } from './state/repository';
 
 describe('user event tracking', () => {
@@ -35,7 +36,7 @@ describe('user event tracking', () => {
       sequence: 1,
       occurredAt: 123,
       navigationId: 'nav-1',
-      frameUrl: 'https://example.test/page',
+      frameUrl: 'https://example.test/page?private=value',
       frameOrigin: 'https://example.test',
       target: { tagName: 'button', path: ['button', 'body'] },
     };
@@ -47,7 +48,12 @@ describe('user event tracking', () => {
     expect(parseUserEventMessage({ ...message, target: { tagName: 'button', path: ['x'.repeat(65)] } })).toBeUndefined();
   });
 
-  it('normalizes validated events into the existing session export model', () => {
+  it('selects semantic names without html and supports targetless page-open', () => {
+    expect(getUserEventDisplayName('click', { tagName: 'button', path: ['button', 'html'], role: 'tab' })).toBe('click · button[role=tab]');
+    expect(getUserEventDisplayName('page-open')).toBe('page-open');
+  });
+
+  it('normalizes validated events as first-class export entries', () => {
     const event = parseUserEventMessage({
       type: USER_EVENT_MESSAGE,
       version: USER_EVENT_TRACKING_VERSION,
@@ -59,24 +65,36 @@ describe('user event tracking', () => {
       frameOrigin: 'https://example.test',
     });
     expect(event).toBeDefined();
-    const captured = normalizeCapturedPostMessage({
-      id: 'user-event:nav-1:1', sequence: event!.sequence, observedAt: 123,
-      origin: event!.frameOrigin, source: 'self',
-      data: { type: USER_EVENT_MESSAGE, version: event!.version, eventType: event!.eventType },
-      tabId: 1, frameId: 0, navigationId: event!.navigationId,
-      frameUrl: event!.frameUrl, frameOrigin: event!.frameOrigin,
-    });
+    const capturedInput = {
+      kind: 'event',
+      id: 'user-event:nav-1:1',
+      sequence: event!.sequence,
+      observedAt: 123,
+      eventType: event!.eventType,
+      tabId: 1,
+      frameId: 0,
+      navigationId: event!.navigationId,
+      frameUrl: event!.frameUrl,
+      frameOrigin: event!.frameOrigin,
+    };
+    const captured = normalizeCapturedUserEvent(capturedInput);
     expect(captured).toBeDefined();
+    expect(normalizeCapturedUserEvent({ ...capturedInput, kind: 'post-message' })).toBeUndefined();
+    expect(normalizeCapturedUserEvent({ ...capturedInput, documentId: '' })).toBeUndefined();
+    expect(normalizeCapturedUserEvent({
+      ...capturedInput,
+      target: { tagName: 'button', path: ['x'.repeat(65)] },
+    })).toBeUndefined();
 
     const repository = new KoshkoRepository();
     repository.record(captured!);
     const [metadata, entry] = repository.exportJsonl().split('\n').map((line) => JSON.parse(line));
 
-    expect(metadata).toMatchObject({ count: 1, postMessageCount: 1 });
+    expect(metadata).toMatchObject({ count: 1, eventCount: 1, postMessageCount: 0 });
     expect(entry).toMatchObject({
-      data: { type: USER_EVENT_MESSAGE, eventType: 'page-open' },
-      frameUrl: 'https://example.test/page',
+      kind: 'event',
+      eventType: 'page-open',
+      frameUrl: 'https://example.test/page?private=value',
     });
   });
-
 });

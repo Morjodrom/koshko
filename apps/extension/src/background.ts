@@ -4,7 +4,7 @@ import {
   normalizeCapturedStateMutationV1,
 } from '@koshko/protocol';
 import { normalizeCapturedPostMessage } from './post-message';
-import { getUserEventTrackingEnabled, parseUserEventMessage } from './user-event-tracking';
+import { getUserEventTrackingEnabled, normalizeCapturedUserEvent, parseUserEventMessage } from './user-event-tracking';
 import {
   PANEL_MESSAGE_CAPTURE,
   PANEL_MESSAGE_ACTIVATE_ORIGIN,
@@ -96,20 +96,13 @@ async function routeUserEventMessage(message: unknown, sender: chrome.runtime.Me
   if (!event || tabId == null) return;
 
   // Never trust page-provided routing metadata. The sender owns tab/frame identity.
-  const captured = normalizeCapturedPostMessage({
-    type: PANEL_MESSAGE_CAPTURE,
-    kind: 'post-message',
+  const captured = normalizeCapturedUserEvent({
+    kind: 'event',
     id: `user-event:${event.navigationId}:${event.sequence}`,
     sequence: event.sequence,
     observedAt: event.occurredAt,
-    origin: event.frameOrigin,
-    source: 'self',
-    data: {
-      type: 'koshko:user-event',
-      version: event.version,
-      eventType: event.eventType,
-      ...(event.target ? { target: event.target } : {}),
-    },
+    eventType: event.eventType,
+    ...(event.target ? { target: event.target } : {}),
     tabId,
     frameId: sender.frameId ?? -1,
     documentId: sender.documentId,
@@ -123,7 +116,7 @@ async function routeUserEventMessage(message: unknown, sender: chrome.runtime.Me
   if (!ports || ports.size === 0) return;
   const payload: PanelCaptureMessage = {
     type: PANEL_MESSAGE_CAPTURE,
-    kind: 'post-message',
+    kind: 'event',
     captured,
   };
   for (const port of ports) port.postMessage(payload);

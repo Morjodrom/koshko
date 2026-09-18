@@ -4,6 +4,7 @@ import {
   getErrorDisplayMessage,
   isCapturedError,
   isCapturedPostMessage,
+  isCapturedUserEvent,
   isCapturedSignal,
   type KoshkoLogEntry,
 } from './state/repository';
@@ -292,6 +293,14 @@ function prepareRecord(
       origin: entry.origin,
       source: entry.source,
       data: entry.data,
+      frame: frameAlias,
+    });
+  } else if (isCapturedUserEvent(entry)) {
+    value = compactObject({
+      ...base,
+      kind: 'event',
+      eventType: entry.eventType,
+      target: entry.target,
       frame: frameAlias,
     });
   } else {
@@ -854,10 +863,10 @@ function getEntryMetadata(entry: KoshkoLogEntry): {
 } {
   if (isCapturedSignal(entry)) return entry.signal;
   if (isCapturedError(entry)) return entry.error;
-  if (isCapturedPostMessage(entry)) {
+  if (isCapturedPostMessage(entry) || isCapturedUserEvent(entry)) {
     return {
       id: entry.id,
-      producerId: 'window.post-message',
+      producerId: isCapturedUserEvent(entry) ? 'user-event' : 'window.post-message',
       producerSequence: entry.sequence,
       occurredAt: entry.observedAt,
     };
