@@ -7,9 +7,12 @@ export default defineConfig({
   manifest: {
     name: 'Koshko Inspector',
     version: extensionPackage.version,
-    description: 'Local Chrome DevTools inspector for koshko signals and page JavaScript errors.',
+    description: 'Local browser DevTools inspector for koshko signals and page JavaScript errors.',
     permissions: ['activeTab', 'scripting', 'storage'],
     optional_host_permissions: ['http://*/*', 'https://*/*'],
+    content_security_policy: {
+      extension_pages: "script-src 'self'; object-src 'self'; connect-src 'self' ws://127.0.0.1:* ws://[::1]:*",
+    },
     web_accessible_resources: [{
       resources: ['console-capture.js'],
       matches: ['http://*/*', 'https://*/*'],

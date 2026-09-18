@@ -664,3 +664,24 @@ The first stable release is complete when:
   prototype target.
 - [OpenTelemetry JavaScript](https://opentelemetry.io/docs/languages/js/): potential future bridge
   to standardized distributed tracing.
+
+## 24. Optional local MCP companion
+
+An explicitly enabled local companion may receive the panel's normalized,
+redacted capture over an authenticated WebSocket bound to literal loopback and
+expose read-only MCP tools over stdio. This opt-in path is the only exception to
+the earlier first-release statements that data remains inside the extension
+process and that the extension makes no network requests: it is local-device
+IPC, never a remote upload.
+
+- The DevTools panel owns the connection so Manifest V3 service-worker
+  suspension does not interrupt it.
+- The bridge uses a browser-independent WebSocket protocol, not Native
+  Messaging, and is shared by Chrome and Firefox builds. Safari Web Extensions
+  can adopt the same transport later.
+- The companion binds only to `127.0.0.1` or `::1`, authenticates before
+  accepting capture data, and keeps bounded in-memory sessions.
+- MCP capabilities are limited to listing sessions and reading traces, state,
+  individual entries, and the existing token-budgeted AI Log.
+- Captured page content is always treated as untrusted evidence and never as
+  instructions or executable tool input.

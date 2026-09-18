@@ -4,6 +4,12 @@ import { PANEL_PORT_PREFIX, parseTabId } from './messaging/messages';
 import { KoshkoRepository } from './state/repository';
 import { createPanelAccessController } from './browser/panel-access';
 import { PanelConnection, type PanelConnectionPort } from './messaging/panel-connection';
+import { McpBridgeClient } from './mcp-bridge/client';
+import {
+  BRIDGE_SETTINGS_STORAGE_KEY,
+  DEFAULT_BRIDGE_SETTINGS,
+  getStoredBridgeSettings,
+} from './mcp-bridge/settings';
 import './ui/ui.css';
 
 const mountTarget = document.querySelector<HTMLDivElement>('#app');
@@ -16,6 +22,15 @@ if (tabId == null) {
 }
 
 const repository = new KoshkoRepository();
+const bridge = new McpBridgeClient(repository, tabId, { ...DEFAULT_BRIDGE_SETTINGS });
+void getStoredBridgeSettings().then((settings) => bridge.setSettings(settings)).catch(() => {});
+const onBridgeSettingsChange = (changes: Record<string, chrome.storage.StorageChange>): void => {
+  if (changes[BRIDGE_SETTINGS_STORAGE_KEY]) {
+    void getStoredBridgeSettings().then((settings) => bridge.setSettings(settings)).catch(() => {});
+  }
+};
+chrome.storage.onChanged?.addListener(onBridgeSettingsChange);
+
 const port = new PanelConnection(() => chrome.runtime.connect({
   name: `${PANEL_PORT_PREFIX}${tabId}`,
 }) as PanelConnectionPort);
@@ -39,4 +54,8 @@ createRoot(mountTarget).render(
   />,
 );
 
-window.addEventListener('unload', () => port.dispose(), { once: true });
+window.addEventListener('unload', () => {
+  chrome.storage.onChanged?.removeListener(onBridgeSettingsChange);
+  bridge.dispose();
+  port.dispose();
+}, { once: true });

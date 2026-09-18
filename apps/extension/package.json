@@ -1,15 +1,18 @@
 {
   "name": "@koshko/extension",
-  "version": "0.8.1",
+  "version": "0.9.0",
   "private": true,
   "type": "module",
   "scripts": {
     "dev": "wxt --browser chrome",
+    "dev:firefox": "wxt --browser firefox --mv3",
     "build": "wxt build --browser chrome",
+    "build:firefox": "wxt build --browser firefox --mv3",
     "test": "vitest run",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
+    "@koshko/bridge": "^0.1.0",
     "@koshko/protocol": "^0.1.0",
     "@xyflow/react": "^12.11.6",
     "json-edit-react": "^1.30.2",

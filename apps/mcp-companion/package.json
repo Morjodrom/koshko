@@ -1,0 +1,29 @@
+{
+  "name": "@koshko/mcp-companion",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Loopback-only Koshko bridge and read-only MCP stdio companion.",
+  "bin": {
+    "koshko-mcp-companion": "./dist/cli.js"
+  },
+  "scripts": {
+    "prebuild": "npm run build --workspace=@koshko/bridge",
+    "build": "tsup src/cli.ts --format esm --dts --sourcemap --clean",
+    "pretest": "npm run build --workspace=@koshko/bridge",
+    "test": "vitest run",
+    "pretypecheck": "npm run build --workspace=@koshko/bridge",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "start": "node dist/cli.js"
+  },
+  "dependencies": {
+    "@koshko/bridge": "^0.1.0",
+    "@modelcontextprotocol/sdk": "^1.0.0",
+    "ws": "^8.18.0",
+    "zod": "^3.24.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "@types/ws": "^8.5.0"
+  }
+}

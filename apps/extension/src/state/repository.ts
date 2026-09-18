@@ -101,6 +101,11 @@ export class KoshkoRepository {
     return this.displayState;
   }
 
+  /** Returns the live reconstructed state, even while the panel display is paused. */
+  getState(): JsonObject {
+    return this.state;
+  }
+
   getDisplayStateHistory(): KoshkoStateSnapshot[] {
     return [...this.displayStateHistory];
   }

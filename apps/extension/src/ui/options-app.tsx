@@ -18,12 +18,21 @@ import {
   type ExtensionMessageRuleScalar,
 } from '../extension-message-rules';
 import { BrandLockup, Icon } from './brand';
+import {
+  DEFAULT_BRIDGE_SETTINGS,
+  getStoredBridgeSettings,
+  setStoredBridgeSettings,
+  validateBridgeSettings,
+  type BridgeSettings,
+} from '../mcp-bridge/settings';
 
 export function OptionsApp(): ReactElement {
   const [origins, setOrigins] = useState<string[]>([]);
   const [input, setInput] = useState('');
   const [status, setStatus] = useState('');
   const [rulesStatus, setRulesStatus] = useState('');
+  const [bridgeSettings, setBridgeSettings] = useState<BridgeSettings>({ ...DEFAULT_BRIDGE_SETTINGS });
+  const [bridgeStatus, setBridgeStatus] = useState('');
   const [rules, setRules] = useState<ExtensionMessageRule[]>(() =>
     [...defaultExtensionMessageRulesConfig().rules],
   );
@@ -33,6 +42,7 @@ export function OptionsApp(): ReactElement {
   useEffect(() => {
     void refreshOrigins();
     void getStoredExtensionMessageRules().then((config) => setRules(config.rules));
+    void getStoredBridgeSettings().then(setBridgeSettings);
     const onPermissionChange = (): void => {
       void refreshOrigins();
     };
@@ -81,6 +91,14 @@ export function OptionsApp(): ReactElement {
   const resetRules = (): void => {
     if (!window.confirm('Reset all message filtering rules to defaults?')) return;
     void persistRules([...defaultExtensionMessageRulesConfig().rules]);
+  };
+
+  const saveBridgeSettings = async (): Promise<void> => {
+    const error = validateBridgeSettings(bridgeSettings);
+    if (error) { setBridgeStatus(error); return; }
+    const saved = await setStoredBridgeSettings(bridgeSettings);
+    setBridgeSettings(saved);
+    setBridgeStatus(saved.enabled ? 'Bridge settings saved. The panel connects only to this loopback endpoint.' : 'Bridge disabled.');
   };
 
   const grantOrigin = async (
@@ -184,6 +202,14 @@ export function OptionsApp(): ReactElement {
             ))
           )}
         </ul>
+      </section>
+      <section className="card">
+        <div className="section-header"><div><h2>Local AI bridge</h2><p className="muted">The DevTools panel sends normalized captures only to an authenticated loopback WebSocket. Captured data is never stored by the extension.</p></div></div>
+        <label><input type="checkbox" checked={bridgeSettings.enabled} onChange={(event) => setBridgeSettings({ ...bridgeSettings, enabled: event.target.checked })} /> Enable local bridge</label>
+        <label className="field"><span>WebSocket URL</span><input aria-label="Bridge WebSocket URL" value={bridgeSettings.url} disabled={!bridgeSettings.enabled} onChange={(event) => setBridgeSettings({ ...bridgeSettings, url: event.target.value })} placeholder="ws://127.0.0.1:34717/bridge" /></label>
+        <label className="field"><span>Authentication token</span><input aria-label="Bridge authentication token" type="password" autoComplete="off" value={bridgeSettings.token} disabled={!bridgeSettings.enabled} onChange={(event) => setBridgeSettings({ ...bridgeSettings, token: event.target.value })} /></label>
+        <div className="actions"><button type="button" className="primary" onClick={() => void saveBridgeSettings()}>Save bridge settings</button></div>
+        <p className="status muted" aria-live="polite">{bridgeStatus}</p>
       </section>
       <section className="card message-rules">
         <div className="section-header">

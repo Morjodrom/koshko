@@ -1,6 +1,6 @@
 # Koshko Inspector
 
-> **Pre-release.** A local Chrome/Chromium DevTools inspector for frontend
+> **Pre-release.** A local Chrome/Chromium and Firefox DevTools inspector for frontend
 > application flows.
 
 The source repository is public, but the npm packages are **not published
@@ -18,6 +18,8 @@ without adding a backend, telemetry, or remote export.
 - Supports per-origin permissions, including cross-origin frames.
 - Pauses, clears, and exports captured diagnostic entries as JSONL.
 - Keeps captured data in local DevTools-session memory.
+- Optionally streams normalized captures over an authenticated loopback-only
+  WebSocket to a bounded, in-memory MCP companion with read-only tools.
 - Provides `@koshko/emitter` and an optional development-only Nano Stores
   adapter for application instrumentation.
 
@@ -41,6 +43,7 @@ Koshko does not send AI Log content to an external service.
 | Protocol | `@koshko/protocol`, `@koshko/emitter`, optional `@koshko/nanostores` |
 | Demo | Vite, Nano Stores |
 | Tooling | tsup, Vitest, strict TypeScript |
+| Optional AI bridge | Browser-standard WebSocket, local MCP stdio companion |
 
 ## Packages
 
@@ -49,6 +52,7 @@ Koshko does not send AI Log content to an external service.
 | `@koshko/protocol` | Public message types, validation, normalization, and state helpers. | Pre-publication |
 | `@koshko/emitter` | State-library-neutral page-side signal and state transport. | Pre-publication |
 | `@koshko/nanostores` | Optional development-only Nano Stores adapter. | Pre-publication |
+| `@koshko/bridge` | Private shared wire types and validation for the extension-to-companion bridge. | Internal |
 
 Until the first registry release, use the local tarball workflow in the
 [package distribution guide](docs/package-distribution.md). Do not assume
@@ -71,6 +75,10 @@ npm run dev:demo
 npm run dev:extension
 ```
 
+For Firefox, use `npm run dev:extension:firefox`. The bridge transport itself
+uses browser-standard WebSocket APIs rather than Native Messaging, so the same
+client architecture can be reused by a Safari Web Extension host.
+
 The demo runs at `http://127.0.0.1:5173`. The unpacked extension is written to:
 
 ```text
@@ -88,11 +96,17 @@ For another application, grant its origin and add development-only instrumentati
 with `@koshko/emitter`. See the [integration guide](docs/integration-guide.md)
 and [integration architecture](docs/integrations.md).
 
+To connect the optional read-only MCP companion, follow the
+[MCP companion setup and verification guide](docs/mcp-companion.md). The bridge
+is disabled by default and accepts only authenticated literal loopback endpoints.
+
 ## Local build and checks
 
 ```bash
 npm run build:packages
 npm exec --workspace=@koshko/extension -- wxt build --browser chrome
+npm run build:extension:firefox
+npm run build:mcp
 npm run pack:packages
 npm test
 npm run typecheck
@@ -105,8 +119,10 @@ are written to ignored `artifacts/`; see
 ## Layout
 
 - `apps/extension/` — extension, DevTools panel, and Options page.
+- `apps/mcp-companion/` — loopback WebSocket receiver and read-only MCP stdio server.
 - `examples/neutral-demo/` — Vite demo.
 - `packages/protocol/` — wire types, validation, normalization, and schema.
+- `packages/bridge/` — authenticated extension-to-companion wire contract.
 - `packages/emitter/` — page-side emitter.
 - `packages/nanostores/` — optional Nano Stores adapter.
 - `docs/` — integration and package documentation.
