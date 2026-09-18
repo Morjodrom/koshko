@@ -41,6 +41,7 @@ import { BrandLockup, Icon } from './brand';
 import { GlobalStateViewer } from './global-state-viewer';
 import type { ManagedPanelConnection, PanelConnectionStatus } from '../messaging/panel-connection';
 import { Timeline } from './timeline';
+import { formatJsonForDisplay } from './json-display';
 import {
   getStoredExtensionMessageRules,
   subscribeToStoredExtensionMessageRules,
@@ -101,6 +102,7 @@ export function PanelApp({
     repository.getDisplayLog(),
   );
   const [logQuery, setLogQuery] = useState('');
+  const [parseJsonStrings, setParseJsonStrings] = useState(false);
   const [selectedActorKeys, setSelectedActorKeys] = useState<ReadonlySet<string>>(
     () => new Set(getActorColumns(repository.getDisplayLog()).map((actor) => actor.key)),
   );
@@ -344,7 +346,16 @@ export function PanelApp({
           </p>
         </div>
         <div className="actions">
-          <label className="extension-filter-toggle">
+          <label className="toolbar-toggle">
+            <input
+              type="checkbox"
+              aria-label="Parse JSON strings"
+              checked={parseJsonStrings}
+              onChange={(event) => setParseJsonStrings(event.target.checked)}
+            />
+            Parse JSON strings
+          </label>
+          <label className="toolbar-toggle">
             <input
               type="checkbox"
               aria-label="Extensions"
@@ -420,6 +431,7 @@ export function PanelApp({
             actors={actors}
             expandedEntryIds={expandedEntryIds}
             toggleDetails={toggleDetails}
+            parseJsonStrings={parseJsonStrings}
           />
         ) : activeTab === 'log' ? (
           <Log
@@ -437,6 +449,7 @@ export function PanelApp({
                 return next;
               });
             }}
+            parseJsonStrings={parseJsonStrings}
             onTypeToggle={(type) => {
               setSelectedLogTypes((previous) => {
                 const next = new Set(previous);
@@ -792,6 +805,7 @@ function Log({
   onQueryChange,
   onActorToggle,
   onTypeToggle,
+  parseJsonStrings,
 }: {
   entries: KoshkoLogEntry[];
   capturedEntryCount: number;
@@ -802,6 +816,7 @@ function Log({
   onQueryChange: (query: string) => void;
   onActorToggle: (key: string) => void;
   onTypeToggle: (type: LogEntryType) => void;
+  parseJsonStrings: boolean;
 }): ReactElement {
   const emptyMessage = capturedEntryCount === 0
     ? ['No log entries yet.', 'Captured signals, browser errors, state mutations, and postMessages will appear here.']
@@ -886,7 +901,7 @@ function Log({
           </summary>
           {payload === undefined
             ? <p className="log-empty-payload muted">No payload.</p>
-            : <pre>{JSON.stringify(payload, null, 2)}</pre>}
+            : <pre>{formatJsonForDisplay(payload, parseJsonStrings)}</pre>}
         </details>
         );
       })}

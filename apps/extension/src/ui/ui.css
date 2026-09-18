@@ -90,8 +90,8 @@ h2 { font-size: 1rem; }
 .toolbar, .section-header { justify-content: space-between; }
 .toolbar-copy { min-width: 0; }
 .actions { flex-wrap: wrap; }
-.extension-filter-toggle { display: inline-flex; align-items: center; gap: 6px; min-height: 38px; padding: 8px 10px; border: 1px solid var(--noir-line-strong); border-radius: 9px; background: var(--noir-surface-raised); color: var(--noir-ink); font-size: .86rem; font-weight: 700; }
-.extension-filter-toggle input { accent-color: var(--noir-accent); }
+.toolbar-toggle { display: inline-flex; align-items: center; gap: 6px; min-height: 38px; padding: 8px 10px; border: 1px solid var(--noir-line-strong); border-radius: 9px; background: var(--noir-surface-raised); color: var(--noir-ink); font-size: .86rem; font-weight: 700; }
+.toolbar-toggle input { accent-color: var(--noir-accent); }
 .reconnecting-banner { margin-bottom: 12px; padding: 9px 12px; border: 1px solid color-mix(in srgb, #b66a00 58%, var(--noir-line)); border-radius: 10px; background: color-mix(in srgb, var(--noir-accent-soft) 58%, var(--noir-surface)); color: var(--noir-ink); font-size: .86rem; font-weight: 700; }
 
 button {

@@ -685,6 +685,34 @@ describe('PanelApp', () => {
     expect(exported).toContain('"id":"post-message-1"');
   });
 
+  it('formats stringified JSON in Log and Timeline when enabled', () => {
+    const mounted = mountPanel();
+    const { port, repository } = mounted;
+
+    act(() => {
+      port.emitPostMessage(capturedPostMessage({ data: '{\"payload\":\"some\"}' }));
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Log' }));
+    expect(screen.getByTestId('log').textContent).toContain('\\\"payload\\\":\\\"some\\\"');
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Parse JSON strings' }));
+    expect(screen.getByTestId('log').textContent).toContain('\"payload\": \"some\"');
+    const rawExport = repository.exportJsonl();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Timeline' }));
+    fireEvent.click(document.querySelector<HTMLElement>('[data-entry-type="post-message"]')!);
+    expect(screen.getByTestId('timeline-details').textContent).toContain('\"payload\": \"some\"');
+    const normalizeExport = (value: string): string => value.replace(/\"exportedAt\":\"[^\"]+\"/, '\"exportedAt\":\"<timestamp>\"');
+    expect(normalizeExport(repository.exportJsonl())).toBe(normalizeExport(rawExport));
+
+    fireEvent.click(screen.getByTestId('clear-button'));
+    expect((screen.getByRole('checkbox', { name: 'Parse JSON strings' }) as HTMLInputElement).checked).toBe(true);
+
+    mounted.unmount();
+    mountPanel();
+    expect((screen.getByRole('checkbox', { name: 'Parse JSON strings' }) as HTMLInputElement).checked).toBe(false);
+  });
+
   it('hides classified extension messages across every output until the global filter is enabled', () => {
     const { port, repository } = mountPanel();
 

@@ -39,6 +39,7 @@ export interface TimelineProps {
   actors: KoshkoTimelineActor[];
   expandedEntryIds: ReadonlySet<string>;
   toggleDetails: (entryId: string) => void;
+  parseJsonStrings?: boolean;
 }
 
 const EventNode = memo(function EventNode({ data }: NodeProps<TimelineNode>): ReactElement {
@@ -142,6 +143,7 @@ function TimelineCanvas({
   actors,
   expandedEntryIds,
   toggleDetails,
+  parseJsonStrings = false,
 }: TimelineProps): ReactElement {
   const [viewport, setViewport] = useState<Viewport>({ x: 0, y: 0, zoom: 1 });
   const [selectedEntryId, setSelectedEntryId] = useState<string | null>(null);
@@ -151,7 +153,8 @@ function TimelineCanvas({
     expandedEntryIds,
     selectedEntryId,
     toggleDetails,
-  }), [actors, entries, expandedEntryIds, selectedEntryId, toggleDetails]);
+    parseJsonStrings,
+  }), [actors, entries, expandedEntryIds, parseJsonStrings, selectedEntryId, toggleDetails]);
   const onNodeClick = useCallback<NodeMouseHandler<TimelineNode>>((_event, node) => {
     if (node.type === 'timelineEvent') {
       setSelectedEntryId((node.data as TimelineEventNodeData).entryId);

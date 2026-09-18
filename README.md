@@ -131,3 +131,7 @@ Raw message payloads can contain private application data. Koshko applies
 bounded serialization and sensitive-key redaction before display, AI copy, or
 export, but applications should still avoid placing credentials or secrets in
 browser messages.
+
+### Parse JSON strings
+
+The Inspector toolbar includes **Parse JSON strings**. It is off by default and applies only to the expanded Log and Timeline views. When enabled, string values containing JSON objects or arrays are rendered as nested, readable JSON; malformed, scalar, or ordinary strings remain unchanged. The setting is local to the mounted panel and does not alter search, AI Log, or JSONL export data.

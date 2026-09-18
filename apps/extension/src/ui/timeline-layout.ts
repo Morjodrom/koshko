@@ -15,6 +15,7 @@ import {
   type KoshkoTimelineActor,
   type KoshkoTimelineEntry,
 } from '../state/repository';
+import { formatJsonForDisplay } from './json-display';
 
 export const TIMELINE_LANE_WIDTH = 220;
 export const TIMELINE_ROW_HEIGHT = 43;
@@ -94,6 +95,7 @@ interface CreateTimelineLayoutOptions {
   expandedEntryIds: ReadonlySet<string>;
   selectedEntryId: string | null;
   toggleDetails: (entryId: string) => void;
+  parseJsonStrings?: boolean;
 }
 
 export function createTimelineLayout({
@@ -102,6 +104,7 @@ export function createTimelineLayout({
   expandedEntryIds,
   selectedEntryId,
   toggleDetails,
+  parseJsonStrings = false,
 }: CreateTimelineLayoutOptions): TimelineLayout {
   const actorIndexes = new Map(actors.map((actor, index) => [actor.key, index]));
   const nodes: TimelineNode[] = [];
@@ -172,7 +175,7 @@ export function createTimelineLayout({
           data: {
             kind: 'detail',
             entryId: captured.id,
-            json: JSON.stringify(captured, null, 2),
+            json: formatJsonForDisplay(captured, parseJsonStrings),
           },
         });
         rowTop += TIMELINE_DETAIL_HEIGHT + DETAIL_GAP;
@@ -301,7 +304,7 @@ export function createTimelineLayout({
         data: {
           kind: 'detail',
           entryId: metadata.id,
-          json: JSON.stringify(captured, null, 2),
+          json: formatJsonForDisplay(captured, parseJsonStrings),
         },
       });
       rowTop += TIMELINE_DETAIL_HEIGHT + DETAIL_GAP;
